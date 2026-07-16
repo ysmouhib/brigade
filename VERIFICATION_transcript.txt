@@ -1,0 +1,90 @@
+== /health ==
+{"ok":true,"lean_mode":"fake","llm_mode":"fake","has_key":true,"verify_policy":"strategic","retrieval":"off","prover_backend":false,"persistent":false}
+
+== submitted job job_f6a7c5c5 ==
+
+== final job state ==
+status: proved | phase: proved | round: 1
+llm_calls: 24 | lean_calls: 15 | events: 53
+nodes:
+  thm_main     [verified] attempts=1
+    lemma_1      [verified] attempts=2
+    lemma_2      [verified] attempts=3
+      lemma_2_a    [verified] attempts=1
+      lemma_2_b    [verified] attempts=1
+
+--- final_lean (Lean-verified) ---
+theorem lemma_1 (n : ℕ) : Even (n * (n + 1)) := by
+  exact Nat.even_mul_succ_self n
+
+theorem lemma_2_a (n : ℕ) : n ^ 2 = n * n := by
+  rw [sq]
+
+theorem lemma_2_b (n : ℕ) : n * n + n = n * (n + 1) := by
+  ring
+
+theorem lemma_2 (n : ℕ) : n ^ 2 + n = n * (n + 1) := by
+  rw [lemma_2_a]
+  exact lemma_2_b n
+
+theorem thm_main (n : ℕ) : Even (n ^ 2 + n) := by
+  rw [lemma_2]
+  exact lemma_1 n
+
+== agent timeline (paginated via ?since=) ==
+[  1] chef   chef                   start              Problem received: Prove that for every natural number n, n^2 + n is even.
+[  2] worker skeptic                probe              probing 'Eq(Mod({n}**2 + {n}, 2), 0)' at 9 candidates
+[  3] worker skeptic                probe_result       no counterexample found; proceeding
+[  4] chef   chef                   round              === Round 1/2 ===
+[  5] worker brainstormer:algebraist strategy           consecutive-product: n²+n = n(n+1): consecutive integers, one is even, so the product is even.
+[  6] worker brainstormer:analyst   strategy           parity-cases: Split on n even/odd; both cases give an even total by direct computation.
+[  7] worker brainstormer:combinatorialist strategy           induction: Base n=0 gives 0; step adds 2n+2, which is even, preserving parity.
+[  8] sous   strategist             plan               strategy 'consecutive-product' with 2 lemma(s). Rewrite the goal with the identity lemma, then a
+[  9] worker formalizer             statement_attempt  theorem lemma_1 (n : ℕ) : Evenn (n * (n + 1))
+[ 10] lean   lean_verifier          lean_check         error: unknown identifier 'Evenn'
+[ 11] worker formalizer             statement_attempt  theorem lemma_1 (n : ℕ) : Even (n * (n + 1))
+[ 12] lean   lean_verifier          lean_check         OK with 1 sorry(ies)
+[ 13] worker formalizer             statement_ok       lemma_1: statement elaborates
+[ 14] worker formalizer             statement_attempt  theorem lemma_2 (n : ℕ) : n ^ 2 + n = n * (n + 1)
+[ 15] lean   lean_verifier          lean_check         OK with 1 sorry(ies)
+[ 16] worker formalizer             statement_ok       lemma_2: statement elaborates
+[ 17] worker formalizer             statement_attempt  theorem thm_main (n : ℕ) : Even (n ^ 2 + n)
+[ 18] lean   lean_verifier          lean_check         OK with 1 sorry(ies)
+[ 19] worker formalizer             statement_ok       thm_main: statement elaborates
+[ 20] worker prover                 prove_attempt      lemma_1 attempt 1: | simp
+[ 21] lean   lean_verifier          lean_check         error: unsolved goals | ⊢ Even (n * (n + 1))
+[ 22] sous   critic                 triage             lemma_1: closing tactic too weak for this goal → cite the exact Mathlib lemma or split the state
+[ 23] worker prover                 prove_attempt      lemma_1 attempt 2: | exact Nat.even_mul_succ_self n
+[ 24] lean   lean_verifier          lean_check         OK (no errors, no sorries)
+[ 25] chef   chef                   verified           lemma_1 VERIFIED by Lean after 2 attempt(s).
+[ 26] worker prover                 prove_attempt      lemma_2 attempt 1: | rfl
+[ 27] lean   lean_verifier          lean_check         error: unsolved goals | ⊢ n ^ 2 + n = n * (n + 1)
+[ 28] sous   critic                 triage             lemma_2: closing tactic too weak for this goal → cite the exact Mathlib lemma or split the state
+[ 29] worker prover                 prove_attempt      lemma_2 attempt 2: | decide
+[ 30] lean   lean_verifier          lean_check         error: unsolved goals | ⊢ n ^ 2 + n = n * (n + 1)
+[ 31] sous   critic                 triage             lemma_2: closing tactic too weak for this goal → cite the exact Mathlib lemma or split the state
+[ 32] chef   chef                   decompose          lemma_2 split into ['lemma_2_a', 'lemma_2_b']. rewrite with the first sub-lemma, close with the 
+[ 33] worker formalizer             statement_attempt  theorem lemma_2_a (n : ℕ) : n ^ 2 = n * n
+[ 34] lean   lean_verifier          lean_check         OK with 1 sorry(ies)
+[ 35] worker formalizer             statement_ok       lemma_2_a: statement elaborates
+[ 36] worker prover                 prove_attempt      lemma_2_a attempt 1: | rw [sq]
+[ 37] lean   lean_verifier          lean_check         OK (no errors, no sorries)
+[ 38] chef   chef                   verified           lemma_2_a VERIFIED by Lean after 1 attempt(s).
+[ 39] worker formalizer             statement_attempt  theorem lemma_2_b (n : ℕ) : n * n + n = n * (n + 1)
+[ 40] lean   lean_verifier          lean_check         OK with 1 sorry(ies)
+[ 41] worker formalizer             statement_ok       lemma_2_b: statement elaborates
+[ 42] worker prover                 prove_attempt      lemma_2_b attempt 1: | ring
+[ 43] lean   lean_verifier          lean_check         OK (no errors, no sorries)
+[ 44] chef   chef                   verified           lemma_2_b VERIFIED by Lean after 1 attempt(s).
+[ 45] worker prover                 prove_attempt      lemma_2 (post-split) attempt 3: | rw [lemma_2_a] | exact lemma_2_b n
+[ 46] lean   lean_verifier          lean_check         OK (no errors, no sorries)
+[ 47] chef   chef                   verified           lemma_2 VERIFIED after decomposition.
+[ 48] worker prover                 prove_attempt      thm_main attempt 1: | rw [lemma_2] | exact lemma_1 n
+[ 49] lean   lean_verifier          lean_check         OK (no errors, no sorries)
+[ 50] chef   chef                   verified           thm_main VERIFIED by Lean after 1 attempt(s).
+[ 51] lean   lean_verifier          lean_check         OK (no errors, no sorries)
+[ 52] lean   lean_verifier          axiom_audit        ok=True axioms=['Classical.choice', 'Quot.sound', 'propext'] 
+[ 53] chef   chef                   proved             Final theorem 'thm_main' verified by Lean (round 1, 15 Lean checks, 23 LLM calls).
+
+53 events, strictly increasing seq: True
+

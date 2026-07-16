@@ -1,0 +1,22 @@
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+server/*.egg-info/
+server/app/*.egg-info/
+
+# secrets & local config
+.env
+*.key
+
+# lean build artifacts (recreated by scripts/setup_lean.sh)
+lean/BrigadeLean/
+lean/repl/
+.brigade_scratch/
+
+# os / editor noise
+.DS_Store
+Thumbs.db
+nohup.out

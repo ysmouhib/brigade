@@ -1,0 +1,8 @@
+{"name": "even_sq_plus_self", "problem": "Prove that for every natural number n, n^2 + n is even.", "expect": "proved"}
+{"name": "sum_first_odds", "problem": "Prove that for every natural number n, the sum of the first n odd numbers equals n^2.", "expect": "proved"}
+{"name": "gcd_comm", "problem": "Prove that for all natural numbers a and b, gcd(a, b) = gcd(b, a).", "expect": "proved"}
+{"name": "abs_triangle", "problem": "Prove that for all real numbers x and y, |x + y| <= |x| + |y|.", "expect": "proved"}
+{"name": "succ_le_double", "problem": "Prove that for every natural number n >= 1, n + 1 <= 2 * n.", "expect": "proved"}
+{"name": "square_nonneg", "problem": "Prove that for every real number x, x^2 >= 0.", "expect": "proved"}
+{"name": "odd_prime_false", "problem": "Prove that every prime number is odd.", "expect": "refuted"}
+{"name": "euler_poly_false", "problem": "Prove that n^2 + n + 41 is prime for every natural number n.", "expect": "refuted"}

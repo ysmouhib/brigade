@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<meta name="description" content="Brigade — a hierarchical multi-agent math prover; a Lean 4 verifier alone decides what counts as proved.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='13' font-size='13'%3E%E2%97%86%3C/text%3E%3C/svg%3E">
+<title>Brigade — proof kitchen</title>
+<style>
+:root{
+  --bg:#141517; --panel:#1d1f23; --panel2:#24262b; --line:#33363c;
+  --ink:#e8e6df; --mut:#9a988f; --brass:#d4a017; --steel:#5b9bd5;
+  --herb:#5cb270; --violet:#9d76e0; --gray:#8a8a8a;
+  --ok:#3f9d55; --bad:#e05252; --run:#4c8fd6; --warn:#e0913f;
+  --mono:ui-monospace,'JetBrains Mono',Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: light){
+  :root{ --bg:#f4f2ec; --panel:#ffffff; --panel2:#f0eee7; --line:#ddd9cf;
+         --ink:#26251f; --mut:#6d6b60; }
+}
+*{box-sizing:border-box} html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);
+  font:14px/1.5 system-ui,-apple-system,'Segoe UI',sans-serif}
+header{display:flex;align-items:center;gap:14px;padding:10px 18px;
+  border-bottom:2px solid var(--brass);background:var(--panel)}
+header h1{font-size:17px;margin:0;letter-spacing:.4px}
+header h1 span{color:var(--brass)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--bad);display:inline-block}
+.dot.ok{background:var(--ok)}
+.chip{font:11px var(--mono);border:1px solid var(--line);border-radius:10px;
+  padding:2px 8px;color:var(--mut)}
+header .sp{flex:1}
+button{font:inherit;color:var(--ink);background:var(--panel2);
+  border:1px solid var(--line);border-radius:7px;padding:6px 12px;cursor:pointer}
+button:hover{border-color:var(--brass)}
+button.primary{background:var(--brass);border-color:var(--brass);color:#1b1400;font-weight:600}
+button:disabled{opacity:.45;cursor:default}
+main{display:grid;grid-template-columns:390px 1fr;gap:14px;padding:14px;
+  height:calc(100% - 54px)}
+@media(max-width:900px){main{grid-template-columns:1fr;height:auto}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:14px;display:flex;flex-direction:column;min-height:0}
+.col{display:flex;flex-direction:column;gap:14px;min-height:0}
+label{font-size:12px;color:var(--mut);display:block;margin:8px 0 3px}
+textarea,input[type=text],input[type=password],select{width:100%;color:var(--ink);
+  background:var(--panel2);border:1px solid var(--line);border-radius:7px;
+  padding:8px;font:13px var(--mono)}
+textarea{min-height:96px;resize:vertical}
+.sl{display:flex;align-items:center;gap:8px}
+.sl input{flex:1} .sl output{font:12px var(--mono);color:var(--brass);min-width:16px;text-align:right}
+.hint{font-size:11.5px;color:var(--mut);margin-top:6px}
+.err{color:var(--bad);font-size:12.5px;margin-top:8px;white-space:pre-wrap}
+#jobs{overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.job{border:1px solid var(--line);border-radius:8px;padding:9px 11px;cursor:pointer;
+  background:var(--panel2)}
+.job:hover{border-color:var(--brass)}
+.job .row{display:flex;gap:8px;align-items:center;font-size:11.5px;color:var(--mut)}
+.job p{margin:5px 0 0;font-size:13px}
+.badge{font:10.5px var(--mono);padding:1px 7px;border-radius:9px;color:#fff}
+.st-proved,.st-verified{background:var(--ok)} .st-refuted,.st-error{background:var(--bad)}
+.st-running,.st-queued,.st-proving,.st-statement_ok{background:var(--run)}
+.st-exhausted,.st-stuck,.st-cancelled,.st-abandoned{background:var(--warn)}
+.st-conjectured{background:var(--gray)}
+/* right panel */
+#panel{min-height:0}
+#meta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding-bottom:10px;
+  border-bottom:1px solid var(--line)}
+#meta .prob{width:100%;font-size:13.5px}
+#meta .facts{font:11.5px var(--mono);color:var(--mut)}
+nav.tabs{display:flex;gap:2px;margin:10px 0 0;border-bottom:1px solid var(--line)}
+nav.tabs button{border:none;background:none;border-radius:7px 7px 0 0;
+  padding:7px 14px;color:var(--mut)}
+nav.tabs button.on{color:var(--ink);background:var(--panel2);
+  border:1px solid var(--line);border-bottom-color:var(--panel2)}
+.view{flex:1;overflow-y:auto;padding-top:10px;min-height:0}
+/* ticket rail */
+.tk{border:1px solid var(--line);border-top:1px dashed var(--line);border-left-width:4px;
+  border-radius:4px;background:var(--panel2);padding:6px 10px;margin-bottom:7px}
+.tk .hd{font:11px var(--mono);display:flex;gap:8px}
+.tk .hd b{font-weight:600}
+.tk pre{margin:3px 0 0;font:12px/1.45 var(--mono);white-space:pre-wrap;word-break:break-word}
+.lv-chef{border-left-color:var(--brass)} .lv-chef .hd b{color:var(--brass)}
+.lv-sous{border-left-color:var(--steel)} .lv-sous .hd b{color:var(--steel)}
+.lv-worker{border-left-color:var(--herb)} .lv-worker .hd b{color:var(--herb)}
+.lv-lean{border-left-color:var(--violet)} .lv-lean .hd b{color:var(--violet)}
+.lv-system{border-left-color:var(--gray)} .lv-system .hd b{color:var(--gray)}
+/* tree */
+.node{border:1px solid var(--line);border-radius:8px;background:var(--panel2);
+  padding:8px 11px;margin-bottom:7px}
+.node .nm{font:13px var(--mono);font-weight:600;margin-right:8px}
+.node .stm{font:11.5px var(--mono);color:var(--steel);margin-top:4px;word-break:break-word}
+.node .inf{font-size:12.5px;color:var(--mut);margin-top:3px}
+pre.lean{font:12.5px/1.5 var(--mono);background:var(--panel2);border:1px solid var(--line);
+  border-radius:8px;padding:12px;overflow-x:auto;white-space:pre}
+.refcard{border:1px solid var(--bad);border-radius:8px;padding:12px;margin-bottom:12px}
+dialog{background:var(--panel);color:var(--ink);border:1px solid var(--line);
+  border-radius:12px;max-width:460px;width:92%}
+dialog::backdrop{background:rgba(0,0,0,.55)}
+.mut{color:var(--mut)} .small{font-size:12px}
+.empty{color:var(--mut);padding:26px;text-align:center}
+a{color:var(--steel)}
+</style>
+</head>
+<body>
+<header>
+  <h1><span>◆</span> Brigade <span class="mut small">proof kitchen</span></h1>
+  <span class="chip"><span id="hdot" class="dot"></span> <span id="hmode">connecting…</span></span>
+  <span class="chip" id="keychip">key: ?</span>
+  <span class="sp"></span>
+  <button onclick="dlg.showModal()">Settings</button>
+</header>
+
+<main>
+  <div class="col">
+    <div class="card">
+      <strong>New problem</strong>
+      <label>A precise mathematical claim to prove</label>
+      <textarea id="problem" placeholder="Prove that for every natural number n, n^2 + n is even."></textarea>
+      <label>Engine</label>
+      <select id="engine">
+        <option value="claude">Claude + Lean — real proving, machine-checked</option>
+        <option value="demo">Scripted replay — fixed showcase, ignores your text</option>
+      </select>
+      <label>Verification</label>
+      <select id="policy">
+        <option value="strategic">Strategic — probe lemmas numerically, batch Lean checks (faster)</option>
+        <option value="full">Full — every attempt checked individually (slowest, most visible)</option>
+      </select>
+      <label>Budgets</label>
+      <div class="sl"><span class="small mut" style="min-width:118px">Rounds</span>
+        <input type="range" id="b_rounds" min="1" max="4" value="2" oninput="this.nextElementSibling.value=this.value"><output>2</output></div>
+      <div class="sl"><span class="small mut" style="min-width:118px">Repair cycles</span>
+        <input type="range" id="b_cycles" min="1" max="6" value="4" oninput="this.nextElementSibling.value=this.value"><output>4</output></div>
+      <div class="sl"><span class="small mut" style="min-width:118px">Decompose depth</span>
+        <input type="range" id="b_depth" min="1" max="3" value="2" oninput="this.nextElementSibling.value=this.value"><output>2</output></div>
+      <div class="sl"><span class="small mut" style="min-width:118px">Brainstormers</span>
+        <input type="range" id="b_brains" min="1" max="4" value="3" oninput="this.nextElementSibling.value=this.value"><output>3</output></div>
+      <div style="margin-top:12px"><button class="primary" style="width:100%" onclick="submitJob()">Send to the kitchen</button></div>
+      <div class="hint" id="enginehint"></div>
+      <div class="err" id="formerr"></div>
+    </div>
+    <div class="card" style="flex:1">
+      <div style="display:flex;align-items:center">
+        <strong>Jobs</strong><span class="sp" style="flex:1"></span>
+        <button onclick="loadJobs()">Refresh</button>
+      </div>
+      <div id="jobs"><div class="empty">Nothing cooking yet.</div></div>
+    </div>
+  </div>
+
+  <div class="card" id="panel">
+    <div id="meta"><span class="mut">Select a job, or send a new problem.</span></div>
+    <nav class="tabs" id="tabs" style="display:none">
+      <button data-v="timeline" class="on" onclick="setTab('timeline')">Timeline</button>
+      <button data-v="tree" onclick="setTab('tree')">Proof tree</button>
+      <button data-v="lean" onclick="setTab('lean')">Lean</button>
+      <button data-v="report" onclick="setTab('report')">Report</button>
+    </nav>
+    <div class="view" id="v_timeline"></div>
+    <div class="view" id="v_tree" style="display:none"></div>
+    <div class="view" id="v_lean" style="display:none"></div>
+    <div class="view" id="v_report" style="display:none"></div>
+  </div>
+</main>
+
+<dialog id="dlg">
+  <form method="dialog" style="padding:6px 8px">
+    <h3 style="margin:4px 0 10px">Settings</h3>
+    <label>Anthropic API key <span class="mut">(stored on the server; get one at console.anthropic.com)</span></label>
+    <input type="password" id="s_key" placeholder="sk-ant-…">
+    <label style="display:flex;gap:8px;align-items:center;margin-top:8px">
+      <input type="checkbox" id="s_remember" style="width:auto"> Remember on this computer (writes .env)
+    </label>
+    <label style="margin-top:12px">Server bearer token <span class="mut">(only if AUTH_TOKEN is set)</span></label>
+    <input type="text" id="s_token" placeholder="optional">
+    <div class="err" id="s_err"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button value="cancel">Close</button>
+      <button class="primary" onclick="saveSettings(event)">Save</button>
+    </div>
+    <p class="hint">Your key never leaves this server: the browser sends it here once, and the
+    server calls Anthropic directly. There are no shared or bundled keys — that would be
+    unsafe and against provider terms. No key? Use the offline demo engine.</p>
+  </form>
+</dialog>
+
+<script>
+const $=id=>document.getElementById(id);
+const dlg=$('dlg');
+let token=localStorage.getItem('brigade_token')||'';
+let current=null, since=0, timer=null, hasKey=false;
+
+function api(path,opts={}){
+  opts.headers=Object.assign({'Content-Type':'application/json'},opts.headers||{});
+  if(token) opts.headers['Authorization']='Bearer '+token;
+  return fetch(path,opts).then(async r=>{
+    const b=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(b.detail||('HTTP '+r.status));
+    return b;
+  });
+}
+function esc(s){return (s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function badge(s){return `<span class="badge st-${esc(s)}">${esc(s)}</span>`}
+
+async function health(){
+  try{
+    const h=await api('/health');
+    $('hdot').classList.add('ok');
+    $('hmode').textContent=`lean:${h.lean_mode} · llm:${h.llm_mode}`;
+    hasKey=h.has_key;
+  }catch(e){ $('hdot').classList.remove('ok'); $('hmode').textContent='offline'; }
+  $('keychip').textContent = hasKey ? 'key: ready' : 'key: none';
+  if(!hasKey && $('engine').value==='claude' && !$('engine').dataset.touched){
+    $('engine').value='demo';
+  }
+  $('engine').dataset.touched='1';
+  engineChanged();
+}
+
+async function loadJobs(){
+  try{
+    const d=await api('/jobs');
+    const box=$('jobs'); box.innerHTML='';
+    if(!d.jobs.length){box.innerHTML='<div class="empty">Nothing cooking yet.</div>';return}
+    for(const j of d.jobs){
+      const el=document.createElement('div'); el.className='job';
+      el.innerHTML=`<div class="row">${badge(j.status)}<span>round ${j.round} · ${esc(j.phase)}</span>
+        <span style="margin-left:auto">${esc(j.engine)}</span></div><p>${esc(j.problem_preview)}</p>`;
+      el.onclick=()=>openJob(j.id);
+      box.appendChild(el);
+    }
+  }catch(e){
+    const hint=/bearer/i.test(e.message)?' — set the bearer token in Settings':'';
+    $('jobs').innerHTML=`<div class="err">${esc(e.message)}${hint}</div>`;
+  }
+}
+
+const DEMO_PROBLEM='Prove that for every natural number n, n^2 + n is even.';
+function engineChanged(){
+  const demo=$('engine').value==='demo', p=$('problem');
+  if(demo){
+    if(!p.dataset.saved) p.dataset.saved=p.value;
+    p.value=DEMO_PROBLEM; p.disabled=true;
+    $('enginehint').textContent='The replay always runs the same recorded scenario so you can watch every mechanism '+
+      '(statement gate, repair, decomposition, axiom audit). It does NOT read your input, and its PROVED stamp '+
+      'demonstrates the pipeline — not your claim. For your own claims: add an API key + Lean, or try the '+
+      'in-browser simulated demo at https://ysmouhib.github.io/brigade/ .';
+  } else {
+    p.disabled=false;
+    if(p.dataset.saved){ p.value=p.dataset.saved; delete p.dataset.saved; }
+    if(!hasKey) $('enginehint').textContent='No API key yet — add yours in Settings for real proving, or pick the scripted replay.';
+    else $('enginehint').textContent='';
+  }
+}
+$('engine').addEventListener('change',engineChanged);
+
+async function submitJob(){
+  $('formerr').textContent='';
+  const body={
+    problem:$('problem').value,
+    demo:$('engine').value==='demo',
+    verify_policy:$('policy').value,
+    budgets:{max_rounds:+$('b_rounds').value,repair_cycles:+$('b_cycles').value,
+             max_depth:+$('b_depth').value,n_brainstormers:+$('b_brains').value}
+  };
+  try{
+    const r=await api('/jobs',{method:'POST',body:JSON.stringify(body)});
+    loadJobs(); openJob(r.job_id);
+  }catch(e){ $('formerr').textContent=e.message; }
+}
+
+function setTab(v){
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  for(const t of ['timeline','tree','lean','report']) $('v_'+t).style.display=(t===v)?'':'none';
+}
+
+function openJob(id){
+  if(timer) clearInterval(timer);
+  current=id; since=0;
+  $('v_timeline').innerHTML=''; $('tabs').style.display='';
+  setTab('timeline');
+  tick();
+  timer=setInterval(tick,1000);
+}
+
+async function tick(){
+  if(!current) return;
+  try{
+    const d=await api('/jobs/'+current);
+    renderMeta(d); renderTree(d); renderLean(d); renderReport(d);
+    let page;
+    do{
+      page=await api(`/jobs/${current}/events?since=${since}&limit=200`);
+      if(page.events.length){ appendEvents(page.events); since=page.next; }
+    }while(page.events.length);
+    if(!['queued','running'].includes(d.status)){ clearInterval(timer); timer=null; loadJobs(); }
+  }catch(e){ /* transient poll errors are fine */ }
+}
+
+function renderMeta(d){
+  $('meta').innerHTML=`
+    <div class="prob">${esc(d.problem)}</div>
+    ${badge(d.status)}
+    <span class="facts">engine ${esc(d.engine)} · phase ${esc(d.phase)} · round ${d.round}
+      · ${d.llm_calls} LLM / ${d.lean_calls} Lean calls</span>
+    ${['queued','running'].includes(d.status)?'<button onclick="cancelJob()">Cancel</button>':''}
+    ${d.engine==='demo'?'<div class="hint" style="width:100%;border-left:3px solid var(--warn);padding-left:8px">Recorded scenario — the replay engine ignores custom input. This PROVED demonstrates the machinery, not a claim of yours. Only the Claude + Lean engine produces machine-checked results.</div>':''}`;
+}
+async function cancelJob(){ try{ await api('/jobs/'+current+'/cancel',{method:'POST',body:'{}'}) }catch(e){} }
+
+function appendEvents(evs){
+  const box=$('v_timeline');
+  const stick=box.scrollTop+box.clientHeight>=box.scrollHeight-40;
+  for(const e of evs){
+    const t=document.createElement('div');
+    t.className='tk lv-'+(e.level||'system');
+    t.innerHTML=`<div class="hd"><b>${esc(e.agent)}</b><span class="mut">${esc(e.type)}</span>
+      <span class="mut" style="margin-left:auto">#${e.seq}</span></div><pre>${esc(e.content)}</pre>`;
+    box.appendChild(t);
+  }
+  if(stick) box.scrollTop=box.scrollHeight;
+}
+
+function renderTree(d){
+  const byParent={};
+  for(const n of d.nodes)(byParent[n.parent_id||'root']??=[]).push(n);
+  const out=[];
+  (function walk(pid){ for(const n of (byParent[pid]||[])){ out.push(n); walk(n.id); } })('root');
+  $('v_tree').innerHTML=out.map(n=>`
+    <div class="node" style="margin-left:${n.depth*20}px">
+      <span class="nm">${esc(n.lean_name)}</span>${badge(n.status)}
+      <span class="mut small"> ×${n.attempts}</span>
+      ${n.informal?`<div class="inf">${esc(n.informal)}</div>`:''}
+      ${n.lean_statement?`<div class="stm">${esc(n.lean_statement)}</div>`:''}
+    </div>`).join('')||'<div class="empty">No proof nodes yet.</div>';
+}
+
+function renderLean(d){
+  const v=$('v_lean');
+  if(d.final_lean){
+    v.innerHTML=`<div style="display:flex;margin-bottom:8px">
+      <strong>Lean-verified file</strong><span style="flex:1"></span>
+      <button onclick="navigator.clipboard.writeText(document.getElementById('leansrc').textContent)">Copy</button></div>
+      <pre class="lean" id="leansrc">${esc(d.final_lean)}</pre>`;
+  } else v.innerHTML='<div class="empty">No final Lean file (yet). Verified partial lemmas appear in the proof tree.</div>';
+}
+
+function renderReport(d){
+  let h='';
+  if(d.refutation) h+=`<div class="refcard"><strong style="color:var(--bad)">REFUTED</strong>
+    <pre class="lean" style="border:none;padding:6px 0">counterexample: ${esc(JSON.stringify(d.refutation.counterexample))}
+claim probed:   ${esc(d.refutation.claim_expr)}</pre>${esc(d.refutation.note)}</div>`;
+  h+=d.summary?`<p>${esc(d.summary)}</p>`:'<div class="empty">The chef writes the report when the job ends.</div>';
+  $('v_report').innerHTML=h;
+}
+
+async function saveSettings(ev){
+  ev.preventDefault();
+  $('s_err').textContent='';
+  token=$('s_token').value.trim();
+  localStorage.setItem('brigade_token',token);
+  try{
+    const key=$('s_key').value.trim();
+    if(key) await api('/settings',{method:'POST',
+      body:JSON.stringify({api_key:key,remember:$('s_remember').checked})});
+    await health(); dlg.close();
+  }catch(e){ $('s_err').textContent=e.message; }
+}
+
+$('problem').addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter') submitJob();
+});
+health(); loadJobs(); setInterval(health,15000);
+$('problem').value='Prove that for every natural number n, n^2 + n is even.';
+</script>
+</body>
+</html>
