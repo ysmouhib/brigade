@@ -5,6 +5,9 @@
 [![Lean 4](https://img.shields.io/badge/Lean-4.15.0%20%2B%20Mathlib-9d76e0.svg)](scripts/setup_lean.sh)
 ![A genuine run, end to end: every node of the proof tree verified by Lean, axiom audit clean, final file compiled whole](docs/genuine-run.png)
 
+> **Origin:** Brigade began as a private project in 2024. This repository was
+> published in July 2026; the public history starts from the published state.
+
 **Website — in-browser simulated demo (one free model via WebLLM, no key, no server) + a recording of a genuine run:** https://ysmouhib.github.io/brigade/  
 *The site is a simulation for illustration; only this repo with your key and a local Lean install produces machine-checked results.*  
 
