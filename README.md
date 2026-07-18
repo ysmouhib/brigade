@@ -3,6 +3,7 @@
 [![tests](https://github.com/ysmouhib/brigade/actions/workflows/ci.yml/badge.svg)](https://github.com/ysmouhib/brigade/actions)
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Lean 4](https://img.shields.io/badge/Lean-4.15.0%20%2B%20Mathlib-9d76e0.svg)](scripts/setup_lean.sh)
+![A genuine run, end to end: every node of the proof tree verified by Lean, axiom audit clean, final file compiled whole](docs/genuine-run.png)
 
 **Website — in-browser simulated demo (one free model via WebLLM, no key, no server) + a recording of a genuine run:** https://ysmouhib.github.io/brigade/  
 *The site is a simulation for illustration; only this repo with your key and a local Lean install produces machine-checked results.*  
