@@ -202,10 +202,14 @@ model keeps the reasoning roles — the pairing used by the strongest agent syst
 Point `PROVER_BASE_URL` / `PROVER_MODEL` at any OpenAI-compatible endpoint (e.g. a
 local vLLM serving Goedel-Prover-V2-8B or DeepSeek-Prover-V2-7B).
 
-There is a benchmark harness: `python3 scripts/bench.py` runs a JSONL problem set
-through the full pipeline (needs Lean + a key) and reports proved/refuted/exhausted
-against expected outcomes; `scripts/bench_problems.jsonl` is a starter set with
-both provable claims and refutation traps.
+There is a benchmark runner: with the server running (real model, real Lean),
+`python3 scripts/bench.py` sends each problem of a JSONL set to it, one at a time,
+and writes `experiments/results/<date>-<time>-<set>/` with a CSV, a Markdown table
+(status, time, LLM and Lean calls, expected vs actual) and each job's full event log.
+It reuses the server's warm Lean REPL, so Mathlib is not loaded twice.
+`scripts/bench_problems.jsonl` is a starter set of 11: easy and medium true claims
+plus false claims that should be refuted. An outcome is `ok`, `miss` (no verdict) or
+`WRONG` (the opposite verdict); the exit code is 1 if anything is `WRONG`.
 
 ## Strategic verification (why keeping Lean doesn't mean being slow)
 
