@@ -189,6 +189,14 @@ async def kill_process_tree(proc) -> None:
         await asyncio.wait_for(proc.wait(), timeout=5)
     except Exception:  # noqa: BLE001 - already gone or not waitable
         pass
+    # Close the pipes now, while the event loop runs; otherwise the garbage collector
+    # closes them after shutdown ("RuntimeError: Event loop is closed" on Ctrl+C).
+    transport = getattr(proc, "_transport", None)
+    if transport is not None:
+        try:
+            transport.close()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 class FileLeanVerifier:
@@ -218,6 +226,9 @@ class FileLeanVerifier:
             except asyncio.TimeoutError:
                 await kill_process_tree(proc)
                 return 124, f"error: Lean check timed out after {self.timeout_s}s"
+            except asyncio.CancelledError:   # the job was cancelled: stop Lean too
+                await kill_process_tree(proc)
+                raise
             return proc.returncode or 0, out.decode(errors="replace")
         finally:
             try:
@@ -266,6 +277,7 @@ class ReplLeanVerifier:
         self._base_env: int | None = None
         self._ctx_envs: dict[str, int] = {}   # verified-context code -> env id (elaborated once)
         self._lock = asyncio.Lock()
+        self._inflight: set[asyncio.Task] = set()
 
     async def _ensure_started(self) -> None:
         if self._proc and self._proc.returncode is None and self._base_env is not None:
@@ -348,18 +360,16 @@ class ReplLeanVerifier:
         return res
 
     async def _check(self, code: str, context: str = "") -> VerifyResult:
-        async with self._lock:
-            try:
-                await self._ensure_started()
-                env = await self._env_for(context)
-                if env is None and context:   # context failed to elaborate alone: concatenate
-                    resp = await self._roundtrip({"cmd": f"{context}\n\n{code}", "env": self._base_env},
-                                                 timeout=self.timeout_s)
-                else:
-                    resp = await self._roundtrip({"cmd": code, "env": env}, timeout=self.timeout_s)
-            except (asyncio.TimeoutError, RuntimeError, BrokenPipeError) as e:
-                await self._restart()
-                return VerifyResult(ok=False, errors=[f"error: Lean REPL failure/timeout: {e}"])
+        # The exchange with the REPL runs as its own task, shielded from the caller's
+        # cancellation. If a job is cancelled mid-check, the exchange still reads Lean's
+        # reply; abandoning it would leave that reply in the pipe for the NEXT check to
+        # read as its own, shifting every later answer by one.
+        task = asyncio.ensure_future(self._exchange(code, context))
+        self._inflight.add(task)
+        task.add_done_callback(self._inflight.discard)
+        resp = await asyncio.shield(task)
+        if isinstance(resp, VerifyResult):
+            return resp
         msgs = resp.get("messages", []) or []
         errors = [m.get("data", "") for m in msgs if m.get("severity") == "error"]
         warnings = [m.get("data", "") for m in msgs if m.get("severity") == "warning"]
@@ -372,6 +382,20 @@ class ReplLeanVerifier:
         return VerifyResult(ok=not errors, errors=errors,
                             sorries=max(len(sorry_items), sorry_warnings),
                             warnings=warnings, goals=goals, infos=infos)
+
+    async def _exchange(self, code: str, context: str) -> dict | VerifyResult:
+        """Send one check and read its reply, holding the lock throughout."""
+        async with self._lock:
+            try:
+                await self._ensure_started()
+                env = await self._env_for(context)
+                if env is None and context:   # context failed to elaborate alone: concatenate
+                    return await self._roundtrip({"cmd": f"{context}\n\n{code}",
+                                                  "env": self._base_env}, timeout=self.timeout_s)
+                return await self._roundtrip({"cmd": code, "env": env}, timeout=self.timeout_s)
+            except (asyncio.TimeoutError, RuntimeError, BrokenPipeError, OSError) as e:
+                await self._restart()
+                return VerifyResult(ok=False, errors=[f"error: Lean REPL failure/timeout: {e}"])
 
     async def axiom_audit(self, code: str, name: str) -> AuditResult:
         """`#print axioms` answers with an info message. Anything other than an explicit
@@ -392,6 +416,10 @@ class ReplLeanVerifier:
 
     async def close(self) -> None:
         await self._restart()
+        # A check still in flight now fails fast (its pipe is closed); let it finish
+        # so no task is left pending when the event loop shuts down.
+        if self._inflight:
+            await asyncio.wait(list(self._inflight), timeout=10)
 
 
 def make_verifier(cfg) -> LeanVerifier:

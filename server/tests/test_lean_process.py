@@ -56,3 +56,14 @@ async def test_mathlib_import_gets_the_long_startup_allowance():
     assert not v.ready
     await v.warm_up()
     assert v.ready and seen == [("import Mathlib", 1200)]
+
+
+async def test_killed_process_leaves_no_open_pipes_behind():
+    """Ctrl+C on the server printed 'RuntimeError: Event loop is closed': the REPL's
+    stdin pipe stayed open and was only closed by the garbage collector, after the loop."""
+    proc = await spawn_process_group(sys.executable, "-c", "import time; time.sleep(30)",
+                                     stdin=asyncio.subprocess.PIPE,
+                                     stdout=asyncio.subprocess.PIPE)
+    await kill_process_tree(proc)
+    assert proc.returncode is not None
+    assert proc._transport.is_closing()        # closed now, while the loop still runs
