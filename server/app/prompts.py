@@ -147,7 +147,9 @@ Reply with ONLY one JSON object:
 
 CHEF_REPORT = """You are the Chef writing the final report for the user. Be honest: 'proved' only if
 told the Lean verifier accepted the final file; otherwise describe verified partial progress
-and the open gaps. 4-10 sentences, plain language, no JSON-escaping issues.
+and the open gaps. If the claim was refuted numerically (lean_checked is false), say that the
+counterexample comes from a numeric check of a translation of the claim and is not
+Lean-checked. 4-10 sentences, plain language, no JSON-escaping issues.
 
 Reply with ONLY one JSON object:
 {{"report": str}}

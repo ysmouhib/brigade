@@ -349,6 +349,7 @@ function renderLean(d){
 function renderReport(d){
   let h='';
   if(d.refutation) h+=`<div class="refcard"><strong style="color:var(--bad)">REFUTED</strong>
+    ${d.refutation.lean_checked ? '' : '<span class="mut"> · numeric check of a translation of the claim, not Lean-checked</span>'}
     <pre class="lean" style="border:none;padding:6px 0">counterexample: ${esc(JSON.stringify(d.refutation.counterexample))}
 claim probed:   ${esc(d.refutation.claim_expr)}</pre>${esc(d.refutation.note)}</div>`;
   h+=d.summary?`<p>${esc(d.summary)}</p>`:'<div class="empty">The chef writes the report when the job ends.</div>';

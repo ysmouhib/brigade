@@ -210,14 +210,16 @@ class Orchestrator:
             if hunt.get("is_checkable") and hunt.get("claim_expr"):
                 self.emit("worker", "skeptic", "probe",
                           f"probing '{hunt['claim_expr']}' at {len(hunt.get('candidates', []))} candidates")
-                cex = numeric.find_counterexample(hunt["claim_expr"], hunt.get("candidates", []))
+                cex = await numeric.find_counterexample_async(hunt["claim_expr"],
+                                                              hunt.get("candidates", []))
                 if cex is not None:
                     job.refutation = Refutation(counterexample=cex, claim_expr=hunt["claim_expr"],
                                                 note=hunt.get("notes", ""))
                     job.status = JobStatus.REFUTED
                     job.phase = "refuted"
                     self.emit("chef", "chef", "refuted",
-                              f"Numeric counterexample found: {cex}. No proof attempted.")
+                              f"Numeric counterexample found: {cex} (sympy check of the "
+                              f"Skeptic's translation, not Lean-checked). No proof attempted.")
                     await self._write_report()
                     return
                 self.emit("worker", "skeptic", "probe_result", "no counterexample found; proceeding")
@@ -382,13 +384,14 @@ class Orchestrator:
             self.emit("worker", "skeptic", "probe",
                       f"{node.lean_name}: probing '{hunt['claim_expr']}' "
                       f"at {len(hunt.get('candidates', []))} candidates", node.id)
-            cex = numeric.find_counterexample(hunt["claim_expr"], hunt.get("candidates", []))
+            cex = await numeric.find_counterexample_async(hunt["claim_expr"],
+                                                          hunt.get("candidates", []))
             if cex is not None:
                 node.status = NodeStatus.REFUTED
                 node.last_errors = [f"numerically refuted at {cex}"]
                 self.emit("chef", "chef", "lemma_refuted",
-                          f"{node.lean_name} is FALSE at {cex} — plan abandoned before proving.",
-                          node.id)
+                          f"{node.lean_name} is FALSE at {cex} (numeric check, not Lean-checked)"
+                          f" — plan abandoned before proving.", node.id)
                 return True
             self.emit("worker", "skeptic", "probe_result",
                       f"{node.lean_name}: no counterexample on the grid", node.id)

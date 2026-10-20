@@ -63,6 +63,10 @@ class Refutation(BaseModel):
     counterexample: dict[str, int]
     claim_expr: str
     note: str = ""
+    # How the counterexample was established. "numeric" = sympy evaluated an LLM-written
+    # translation of the claim; it is evidence, not a Lean-checked certificate.
+    method: str = "numeric"
+    lean_checked: bool = False
 
 
 class Budgets(BaseModel):
