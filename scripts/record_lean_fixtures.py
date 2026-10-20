@@ -85,6 +85,9 @@ def record_repl() -> None:
 
 
 def main() -> int:
+    import shutil
+    if not shutil.which("lake"):
+        sys.exit("'lake' is not on PATH. Run:  source ~/.elan/env   (or open a new terminal)")
     if not (PROJ / "lakefile.lean").exists() and not (PROJ / "lakefile.toml").exists():
         sys.exit(f"no Lean project at {PROJ}; run scripts/setup_lean.sh first")
     OUT.mkdir(parents=True, exist_ok=True)

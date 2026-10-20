@@ -100,3 +100,83 @@ async def test_overload_is_retried_then_reported_as_transient(wire):
     with pytest.raises(llm_mod.LLMError):
         await llm.complete(role="chef", system="s", user="u")
     assert len(rec.bodies) == llm.max_attempts
+
+
+# ------------------------------------------------- OpenAI-compatible providers (free tiers)
+import httpx as httpx1   # OpenAICompatLLM uses plain httpx, not the SDK's httpx2
+
+from app.llm import OpenAICompatLLM
+
+
+class _Recorder1(_Recorder):
+    """Same recorder, answering with plain-httpx responses."""
+
+    def __call__(self, request):
+        self.bodies.append(json.loads(request.content))
+        status, payload = self.responses.pop(0) if len(self.responses) > 1 else self.responses[0]
+        return httpx1.Response(status, json=payload)
+
+
+def _chat(text: str) -> dict:
+    return {"choices": [{"message": {"role": "assistant", "content": text}}]}
+
+
+def _compat(responses, **kw):
+    rec = _Recorder1(responses)
+    seen_headers = []
+
+    def handler(request):
+        seen_headers.append(dict(request.headers))
+        return rec(request)
+    llm = OpenAICompatLLM("https://api.example.test/v1/", kw.pop("model", "worker-m"),
+                          api_key="free-key", transport=httpx1.MockTransport(handler), **kw)
+    return llm, rec, seen_headers
+
+
+async def test_compat_routes_roles_and_sends_key(monkeypatch):
+    monkeypatch.setattr(llm_mod.asyncio, "sleep", _instant)
+    llm, rec, headers = _compat([(200, _chat("{}"))], chef_model="chef-m")
+    for role in ("chef", "strategist", "critic", "prover"):
+        await llm.complete(role=role, system="s", user="u", max_tokens=900)
+    assert [b["model"] for b in rec.bodies] == ["chef-m"] * 3 + ["worker-m"]
+    assert headers[0]["authorization"] == "Bearer free-key"
+    # thinking models spend output tokens before answering: small budgets get a floor
+    assert all(b["max_tokens"] >= 8192 for b in rec.bodies)
+
+
+async def test_compat_rate_limit_is_retried_after_the_advertised_wait(monkeypatch):
+    waits = []
+
+    async def fake_sleep(s, *a, **k):
+        waits.append(s)
+    monkeypatch.setattr(llm_mod.asyncio, "sleep", fake_sleep)
+    rec = _Recorder1([(429, {"error": "slow down"}), (200, _chat('{"ok": 1}'))])
+
+    def handler(request):
+        resp = rec(request)
+        if resp.status_code == 429:
+            resp.headers["retry-after"] = "7"
+        return resp
+    llm = OpenAICompatLLM("https://api.example.test/v1", "m", transport=httpx1.MockTransport(handler))
+    assert await llm.complete(role="prover", system="s", user="u") == '{"ok": 1}'
+    assert len(rec.bodies) == 2 and waits and waits[0] >= 7
+
+
+async def test_compat_request_errors_are_fatal(monkeypatch):
+    monkeypatch.setattr(llm_mod.asyncio, "sleep", _instant)
+    llm, rec, _ = _compat([(400, {"error": {"message": "model not found"}})])
+    with pytest.raises(llm_mod.LLMFatalError, match="400"):
+        await llm.complete(role="chef", system="s", user="u")
+    assert len(rec.bodies) == 1
+
+
+async def test_compat_outage_becomes_unavailable(monkeypatch):
+    monkeypatch.setattr(llm_mod.asyncio, "sleep", _instant)
+    llm, rec, _ = _compat([(503, {"error": "down"})])
+    with pytest.raises(llm_mod.LLMUnavailableError):
+        await llm.complete(role="chef", system="s", user="u")
+    assert len(rec.bodies) == llm.max_attempts
+
+
+async def _instant(*_a, **_k):
+    return None

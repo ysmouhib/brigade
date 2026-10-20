@@ -80,3 +80,4 @@ if [ "${WITH_REPL:-1}" = "1" ]; then
 fi
 
 echo "== done. Point the server at LEAN_PROJECT_DIR=$PROJ =="
+echo "   New terminals find 'lake' automatically. In THIS terminal, first run:  source ~/.elan/env"

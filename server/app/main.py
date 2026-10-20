@@ -97,7 +97,11 @@ def create_app(cfg: Optional[Config] = None,
         if cfg.fake_llm:
             from .testing import default_fake_lean, demo_llm
             return "demo", demo_llm(), default_fake_lean()
-        if not cfg.anthropic_api_key:
+        compat = cfg.llm_provider == "openai"
+        if compat and not (cfg.openai_base_url and cfg.openai_api_key):
+            raise HTTPException(409, "LLM_PROVIDER=openai needs OPENAI_BASE_URL and OPENAI_API_KEY "
+                                     "in .env (then restart), or tick 'offline demo' for this job.")
+        if not compat and not cfg.anthropic_api_key:
             raise HTTPException(409, "No Anthropic API key configured. Open Settings and "
                                      "paste your key, or tick 'offline demo' for this job.")
         if isinstance(app.state.lean, FakeLean):
@@ -106,14 +110,19 @@ def create_app(cfg: Optional[Config] = None,
             raise HTTPException(409, "Real Claude jobs need a real Lean verifier, but the server "
                                      "runs with LEAN_MODE=fake. Run the Lean setup, set "
                                      "LEAN_MODE=file or repl, and restart; or tick 'offline demo'.")
-        if app.state.real_llm is None or app.state.real_llm_key != cfg.anthropic_api_key:
-            llm_: LLM = AnthropicLLM(cfg.anthropic_api_key, cfg.chef_model, cfg.worker_model)
+        key = cfg.openai_api_key if compat else cfg.anthropic_api_key
+        if app.state.real_llm is None or app.state.real_llm_key != key:
+            if compat:
+                llm_: LLM = OpenAICompatLLM(cfg.openai_base_url, cfg.worker_model, key,
+                                            chef_model=cfg.chef_model)
+            else:
+                llm_ = AnthropicLLM(key, cfg.chef_model, cfg.worker_model)
             if cfg.prover_base_url and cfg.prover_model:
                 llm_ = RoutedLLM(llm_, OpenAICompatLLM(cfg.prover_base_url, cfg.prover_model,
                                                        cfg.prover_api_key))
             app.state.real_llm = llm_
-            app.state.real_llm_key = cfg.anthropic_api_key
-        return "claude", app.state.real_llm, app.state.lean
+            app.state.real_llm_key = key
+        return ("openai-compat" if compat else "claude"), app.state.real_llm, app.state.lean
 
     # ------------------------------------------------------------------ routes
     @app.get("/")
@@ -124,8 +133,9 @@ def create_app(cfg: Optional[Config] = None,
     async def health():
         return {"ok": True,
                 "lean_mode": cfg.lean_mode,
-                "llm_mode": "fake" if cfg.fake_llm else "anthropic",
+                "llm_mode": "fake" if cfg.fake_llm else cfg.llm_provider,
                 "has_key": bool(cfg.anthropic_api_key) or cfg.fake_llm
+                           or (cfg.llm_provider == "openai" and bool(cfg.openai_api_key))
                            or app.state.injected_llm is not None,
                 "verify_policy": cfg.verify_policy,
                 "retrieval": cfg.retrieval,

@@ -20,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 LEAN_MODES = ("fake", "file", "repl")
 VERIFY_POLICIES = ("full", "strategic")
 RETRIEVAL_BACKENDS = ("off", "loogle", "leansearch")
+LLM_PROVIDERS = ("anthropic", "openai")
 
 
 def _env(name: str, default: str = "") -> str:
@@ -64,6 +65,11 @@ class Config:
     # --- modes ---
     fake_llm: bool = field(default_factory=lambda: _b("FAKE_LLM"))
     lean_mode: str = field(default_factory=lambda: _choice("LEAN_MODE", "fake", LEAN_MODES))
+    # --- which API serves the agents: "anthropic" (Claude) or "openai" (any
+    #     OpenAI-compatible endpoint, e.g. a free Gemini or Mistral tier) ---
+    llm_provider: str = field(default_factory=lambda: _choice("LLM_PROVIDER", "anthropic", LLM_PROVIDERS))
+    openai_base_url: str = field(default_factory=lambda: _env("OPENAI_BASE_URL"))
+    openai_api_key: str = field(default_factory=lambda: _env("OPENAI_API_KEY"))
     # --- anthropic ---
     anthropic_api_key: str = field(default_factory=lambda: _env("ANTHROPIC_API_KEY"))
     chef_model: str = field(default_factory=lambda: _env("CHEF_MODEL", "claude-opus-4-8"))

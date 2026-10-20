@@ -129,36 +129,75 @@ class AnthropicLLM:
 
 
 class OpenAICompatLLM:
-    """Chat-completions client for any OpenAI-compatible endpoint (vLLM, llama.cpp, hosted).
+    """Chat-completions client for any OpenAI-compatible endpoint: free hosted tiers
+    (Gemini, Mistral), local servers (vLLM, llama.cpp, Ollama) or a dedicated prover model.
 
-    Lets a dedicated prover model — e.g. Goedel-Prover-V2 or DeepSeek-Prover-V2 served
-    locally — take the prover role while a general model keeps the reasoning roles.
+    Free tiers allow only a few requests per minute, so 429s are retried after the wait
+    the server advertises. Errors a retry cannot fix raise LLMFatalError, outages
+    LLMUnavailableError, matching AnthropicLLM. Thinking models spend output tokens
+    before answering, so max_tokens never goes below `max_tokens_floor`.
     """
 
-    def __init__(self, base_url: str, model: str, api_key: str = ""):
+    def __init__(self, base_url: str, model: str, api_key: str = "", *,
+                 chef_model: str | None = None, max_attempts: int = 4,
+                 max_tokens_floor: int = 8192, max_concurrency: int = 2, transport=None):
         import httpx
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self.chef_model = chef_model or model
+        self.max_attempts = max_attempts
+        self.max_tokens_floor = max_tokens_floor
+        self._sem = asyncio.Semaphore(max_concurrency)
         self._client = httpx.AsyncClient(
-            timeout=httpx.Timeout(180.0),
+            timeout=httpx.Timeout(180.0), transport=transport,
             headers={"Authorization": f"Bearer {api_key}"} if api_key else {})
+
+    def _model_for(self, role: str, override: str | None) -> str:
+        if override:
+            return override
+        return self.chef_model if role in ("chef", "strategist", "critic") else self.model
+
+    @staticmethod
+    def _wait_for(resp, attempt: int) -> float:
+        try:
+            return min(120.0, max(1.0, float(resp.headers.get("retry-after", ""))))
+        except ValueError:
+            return min(60.0, 5.0 * 2 ** attempt)
 
     async def complete(self, *, role: str, system: str, user: str,
                        temperature: float = 0.3, max_tokens: int = 2000,
                        model: str | None = None) -> str:
-        r = await self._client.post(f"{self.base_url}/chat/completions", json={
-            "model": model or self.model,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            "messages": [{"role": "system", "content": system},
-                         {"role": "user", "content": user}],
-        })
-        r.raise_for_status()
-        data = r.json()
-        try:
-            return data["choices"][0]["message"]["content"] or ""
-        except (KeyError, IndexError, TypeError) as e:
-            raise LLMError(f"unexpected chat-completions shape: {e}: {str(data)[:200]}")
+        import httpx
+        body = {"model": self._model_for(role, model),
+                "temperature": temperature,
+                "max_tokens": max(max_tokens, self.max_tokens_floor),
+                "messages": [{"role": "system", "content": system},
+                             {"role": "user", "content": user}]}
+        last = ""
+        async with self._sem:
+            for attempt in range(self.max_attempts):
+                wait = min(60.0, 5.0 * 2 ** attempt)
+                try:
+                    r = await self._client.post(f"{self.base_url}/chat/completions", json=body)
+                except httpx.HTTPError as e:
+                    last = f"{type(e).__name__}: {e}"
+                else:
+                    if r.status_code == 200:
+                        data = r.json()
+                        try:
+                            return data["choices"][0]["message"]["content"] or ""
+                        except (KeyError, IndexError, TypeError) as e:
+                            raise LLMError(f"unexpected chat-completions shape: {e}: "
+                                           f"{str(data)[:200]}")
+                    if r.status_code not in _RETRYABLE_STATUS:
+                        raise LLMFatalError(f"{self.base_url} rejected the request "
+                                            f"({r.status_code}): {r.text[:300]}")
+                    last = f"HTTP {r.status_code}: {r.text[:200]}"
+                    wait = self._wait_for(r, attempt)
+                if attempt + 1 < self.max_attempts:
+                    await asyncio.sleep(wait)
+        raise LLMUnavailableError(f"{self.base_url} unavailable after {self.max_attempts} "
+                                  f"attempts: {last}")
 
 
 class RoutedLLM:

@@ -107,3 +107,45 @@ def test_powershell_loader_strips_inline_comments(tmp_path):
     out = subprocess.run([exe, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", cmd],
                          capture_output=True, text=True, timeout=120)
     assert out.stdout.strip() == "file||abc#def", out.stderr
+
+
+def test_llm_provider_is_validated(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
+    monkeypatch.setenv("OPENAI_API_KEY", "k  # free tier")
+    cfg = Config()
+    assert (cfg.llm_provider, cfg.openai_api_key) == ("openai", "k")
+    monkeypatch.setenv("LLM_PROVIDER", "gpt")
+    with pytest.raises(ValueError, match="LLM_PROVIDER"):
+        Config()
+
+
+class _RealLeanStub:
+    """Stands in for a real Lean backend (anything that is not FakeLean)."""
+    async def check(self, code, context=""):
+        from app.lean.verifier import VerifyResult
+        return VerifyResult(ok=False, errors=["stub"])
+
+    async def axiom_audit(self, code, name):
+        from app.lean.verifier import AuditResult
+        return AuditResult(ok=False)
+
+    async def close(self):
+        pass
+
+
+async def test_openai_compatible_provider_runs_real_jobs_without_an_anthropic_key():
+    import httpx
+    cfg = Config()
+    cfg.fake_llm, cfg.anthropic_api_key = False, ""
+    cfg.llm_provider, cfg.openai_base_url = "openai", "http://127.0.0.1:9/v1"
+    app = create_app(cfg, lean=_RealLeanStub())
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                     base_url="http://t") as c:
+            r = await c.post("/jobs", json={"problem": "Prove that 1 + 1 = 2.", "demo": False})
+            assert r.status_code == 409 and "OPENAI_API_KEY" in r.json()["detail"]
+            cfg.openai_api_key = "free-key"
+            assert (await c.get("/health")).json()["llm_mode"] == "openai"
+            r = await c.post("/jobs", json={"problem": "Prove that 1 + 1 = 2.", "demo": False})
+            assert r.status_code == 200 and r.json()["engine"] == "openai-compat"
