@@ -39,6 +39,7 @@ class VerifyResult:
     sorries: int = 0
     warnings: list[str] = field(default_factory=list)
     goals: list[str] = field(default_factory=list)   # goal states of sorries/errors when the backend exposes them
+    infos: list[str] = field(default_factory=list)   # informational output, e.g. `#print axioms`
 
     def summary(self) -> str:
         if self.ok and self.sorries == 0:
@@ -280,27 +281,32 @@ class ReplLeanVerifier:
         msgs = resp.get("messages", []) or []
         errors = [m.get("data", "") for m in msgs if m.get("severity") == "error"]
         warnings = [m.get("data", "") for m in msgs if m.get("severity") == "warning"]
+        infos = [m.get("data", "") for m in msgs if m.get("severity") == "info"]
         sorry_items = resp.get("sorries", []) or []
         goals = [s.get("goal", "") for s in sorry_items if s.get("goal")]
-        return VerifyResult(ok=not errors, errors=errors, sorries=len(sorry_items),
-                            warnings=warnings, goals=goals)
+        # The REPL lists `sorry` syntax it elaborated; a sorryAx produced any other way
+        # (a tactic, a metaprogram) only shows up as Lean's warning, so count both.
+        sorry_warnings = sum(1 for w in warnings if "declaration uses 'sorry'" in w)
+        return VerifyResult(ok=not errors, errors=errors,
+                            sorries=max(len(sorry_items), sorry_warnings),
+                            warnings=warnings, goals=goals, infos=infos)
 
     async def axiom_audit(self, code: str, name: str) -> AuditResult:
+        """`#print axioms` answers with an info message. Anything other than an explicit
+        list of standard axioms (or "does not depend on any axioms") fails the audit."""
         res = await self.check(code + f"\n#print axioms {name}")
-        joined = "\n".join(res.warnings) + "\n" + "\n".join(res.errors)
-        async with self._lock:
-            pass
-        m = AXIOM_LINE.search(joined)
         if res.errors:
             return AuditResult(ok=False, note="; ".join(res.errors[:2]))
-        if not m:
-            # `#print axioms` reports via info messages, which the repl also surfaces;
-            # fall back to accepting when nothing suspicious is present.
-            return AuditResult(ok=("sorryAx" not in joined), axioms=[], note="axiom list not parsed")
-        axioms = [a.strip() for a in m.group(1).split(",") if a.strip()]
-        bad = [a for a in axioms if a not in STANDARD_AXIOMS]
-        return AuditResult(ok=not bad, axioms=axioms,
-                           note="" if not bad else f"non-standard axioms: {bad}")
+        report = "\n".join(res.infos + res.warnings)
+        m = AXIOM_LINE.search(report)
+        if m:
+            axioms = [a.strip() for a in m.group(1).split(",") if a.strip()]
+            bad = [a for a in axioms if a not in STANDARD_AXIOMS]
+            return AuditResult(ok=not bad, axioms=axioms,
+                               note="" if not bad else f"non-standard axioms: {bad}")
+        if f"'{name}' does not depend on any axioms" in report:
+            return AuditResult(ok=True, axioms=[])
+        return AuditResult(ok=False, note=f"no axiom report from Lean for {name}; failing closed")
 
     async def close(self) -> None:
         await self._restart()
