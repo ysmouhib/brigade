@@ -38,6 +38,16 @@ PERSONAS = [
     "a number theorist who reaches for divisibility, modular arithmetic and factorization",
 ]
 
+# One approach per sampled proof candidate. Claude models no longer take a temperature
+# spread, so parallel samples are made to differ by what they are asked to try.
+PROOF_VARIANTS = [
+    "Try the most direct proof: one or two strong tactics (omega, simp, norm_num, ring, "
+    "nlinarith, positivity) before anything elaborate.",
+    "Rewrite the goal with well-known Mathlib lemmas first, then close it with simp, ring or linarith.",
+    "Use structure: induction, case analysis (rcases, by_cases, interval_cases) or a calc chain.",
+    "Introduce helper facts with `have` (bounds, divisibility, sign facts), then combine them.",
+]
+
 SKEPTIC = """You are the Skeptic of a math-proving brigade. Before anyone spends effort proving,
 you try to DESTROY the claim numerically.
 

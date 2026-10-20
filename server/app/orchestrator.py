@@ -29,8 +29,12 @@ import traceback
 
 from . import agents, numeric, retrieval
 from .config import Config
-from .llm import LLM, LLMError
+from .llm import LLM, LLMError, LLMFatalError, LLMUnavailableError
+
+# Consecutive unreachable-API calls after which the job stops as an infrastructure error.
+MAX_UNAVAILABLE_IN_A_ROW = 3
 from .models import AgentEvent, Job, JobStatus, NodeStatus, ProofNode, Refutation, new_id
+from .prompts import PROOF_VARIANTS
 from .lean.verifier import LeanVerifier, lint_proof
 
 NAME_RE = re.compile(r"[^A-Za-z0-9_']")
@@ -51,6 +55,7 @@ class Orchestrator:
         self.job, self.llm, self.lean, self.cfg = job, llm, lean, cfg
         self._seq = 0
         self._names: set[str] = set()
+        self._unavailable_in_a_row = 0
 
     # ---------------------------------------------------------------- events
     def emit(self, level: str, agent: str, type_: str, content: str, node_id: str | None = None):
@@ -63,9 +68,19 @@ class Orchestrator:
     # ---------------------------------------------------------------- budget-aware wrappers
     async def _llm(self, coro):
         if self.job.llm_calls >= self.cfg.max_llm_calls:
+            coro.close()
             raise BudgetExceeded("LLM call budget exhausted")
         self.job.llm_calls += 1
-        return await coro
+        try:
+            result = await coro
+        except LLMUnavailableError as e:
+            self._unavailable_in_a_row += 1
+            if self._unavailable_in_a_row >= MAX_UNAVAILABLE_IN_A_ROW:
+                raise LLMFatalError(f"Claude API unreachable ({self._unavailable_in_a_row} calls "
+                                    f"in a row failed): {e}") from e
+            raise
+        self._unavailable_in_a_row = 0
+        return result
 
     async def _check(self, code: str, node: ProofNode | None = None, context: str = ""):
         if self.job.lean_calls >= self.cfg.max_lean_calls:
@@ -173,6 +188,11 @@ class Orchestrator:
             job.phase = "exhausted"
             self.emit("chef", "chef", "budget", str(e))
             await self._write_report()
+        except LLMFatalError as e:
+            # e.g. unknown model id or bad key: retrying would only burn the budget
+            job.status = JobStatus.ERROR
+            job.phase = "error"
+            self.emit("system", "system", "error", f"Job stopped: {e}")
         except Exception:  # noqa: BLE001 — surface, never hang
             job.status = JobStatus.ERROR
             job.phase = "error"
@@ -217,6 +237,9 @@ class Orchestrator:
             results = await asyncio.gather(
                 *[self._llm(agents.brainstorm(self.llm, job.problem, p, feedback)) for p in personas],
                 return_exceptions=True)
+            for r in results:   # a rejected request will be rejected for every persona
+                if isinstance(r, (LLMFatalError, BudgetExceeded)):
+                    raise r
             strategies = []
             for p, r in zip(personas, results):
                 if isinstance(r, Exception):
@@ -445,14 +468,18 @@ class Orchestrator:
         None if nothing usable came back (fall through to the normal loop untouched)."""
         k = max(2, self.cfg.prove_samples)
         helpers = self._verified_context(node.id)
+        # Each sample gets its own approach in the prompt (Claude ignores temperature);
+        # the temperature spread is still passed for OpenAI-compatible prover endpoints.
         temps = [0.2 + 0.6 * i / max(1, k - 1) for i in range(k)]
+        variants = [PROOF_VARIANTS[i % len(PROOF_VARIANTS)] for i in range(k)]
         results = await asyncio.gather(
-            *[self._llm(agents.prove(self.llm, node, helpers, [], "",
-                                     retrieved=retrieved, temperature=t)) for t in temps],
+            *[self._llm(agents.prove(self.llm, node, helpers, [], "", retrieved=retrieved,
+                                     temperature=t, variant=v))
+              for t, v in zip(temps, variants)],
             return_exceptions=True)
         bodies: list[str] = []
         for r in results:
-            if isinstance(r, BudgetExceeded):
+            if isinstance(r, (BudgetExceeded, LLMFatalError)):
                 raise r
             if isinstance(r, Exception) or r.get("claims_false"):
                 continue

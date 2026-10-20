@@ -47,17 +47,18 @@ async def formalize(llm: LLM, node: ProofNode, problem: str, errors: list[str],
 async def prove(llm: LLM, node: ProofNode, helpers: list[ProofNode],
                 errors: list[str], hint: str,
                 retrieved: list[str] | None = None,
-                temperature: float = 0.3) -> dict:
+                temperature: float = 0.3, variant: str = "") -> dict:
     helper_txt = "\n".join(f"- {h.lean_statement}" for h in helpers) or "(none)"
     err = "\n".join(errors) if errors else "(none)"
     goal = f"\nLEAN GOAL STATE (from the statement gate):\n{node.goal}\n" if node.goal else ""
     hints = ("\nPOSSIBLY RELEVANT MATHLIB DECLARATIONS (advisory, verify names):\n"
              + "\n".join(f"- {r}" for r in retrieved) + "\n") if retrieved else ""
+    approach = f"\n\nAPPROACH FOR THIS ATTEMPT:\n{variant}" if variant else ""
     user = (f"TARGET lean_name: {node.lean_name}\n"
             f"PINNED STATEMENT (do not restate or alter):\n{node.lean_statement}\n{goal}\n"
             f"VERIFIED HELPER LEMMAS you may cite by name:\n{helper_txt}\n{hints}\n"
             f"INFORMAL SKETCH:\n{node.sketch}\n\n"
-            f"PREVIOUS LEAN ERRORS:\n{err}\n\nCRITIC HINT:\n{hint or '(none)'}")
+            f"PREVIOUS LEAN ERRORS:\n{err}\n\nCRITIC HINT:\n{hint or '(none)'}{approach}")
     return await complete_json(llm, role="prover", system=prompts.PROVER.format(),
                                user=user, temperature=temperature, max_tokens=2500)
 

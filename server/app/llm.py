@@ -17,7 +17,22 @@ class LLM(Protocol):
 
 
 class LLMError(Exception):
-    pass
+    """A call failed in a way the orchestrator can work around (bad JSON, transient outage)."""
+
+
+class LLMUnavailableError(LLMError):
+    """The API could not be reached or stayed overloaded through every retry. One such
+    failure is tolerated; several in a row mean an outage (see Orchestrator._llm)."""
+
+
+class LLMFatalError(Exception):
+    """The API will never accept this request as sent (unknown model, bad key, invalid
+    parameter). Retrying cannot help, so the job stops with this message instead of
+    spending its budget. Deliberately NOT a subclass of LLMError."""
+
+
+# Statuses worth retrying: timeouts, conflicts, rate limits, server errors, overload.
+_RETRYABLE_STATUS = {408, 409, 429, 500, 502, 503, 504, 529}
 
 
 def extract_json(text: str) -> dict:
@@ -63,13 +78,21 @@ async def complete_json(llm: LLM, *, role: str, system: str, user: str,
 
 
 class AnthropicLLM:
-    """Thin async wrapper over the Anthropic Messages API (see https://docs.claude.com/en/api/overview)."""
+    """Thin async wrapper over the Anthropic Messages API (see https://docs.claude.com/en/api/overview).
 
-    def __init__(self, api_key: str, chef_model: str, worker_model: str):
+    `temperature` is accepted for interface compatibility but never sent: the Anthropic
+    Python SDK v1+ removed it, and Claude 4.7+ models reject non-default values. Variety
+    between calls comes from the prompts instead (brainstormer personas, sample variants).
+    """
+
+    def __init__(self, api_key: str, chef_model: str, worker_model: str, max_attempts: int = 3):
         import anthropic  # imported lazily so tests never require the package config
-        self._client = anthropic.AsyncAnthropic(api_key=api_key)
+        # Brigade owns the retry loop below, so the SDK's own retries are switched off
+        # (otherwise one call could turn into 3 x 3 attempts).
+        self._client = anthropic.AsyncAnthropic(api_key=api_key, max_retries=0)
         self.chef_model = chef_model
         self.worker_model = worker_model
+        self.max_attempts = max_attempts
         self._sem = asyncio.Semaphore(4)  # basic concurrency cap
 
     def _model_for(self, role: str, override: str | None) -> str:
@@ -81,22 +104,28 @@ class AnthropicLLM:
                        temperature: float = 0.3, max_tokens: int = 2000,
                        model: str | None = None) -> str:
         import anthropic
+        last: Exception | None = None
         async with self._sem:
-            for attempt in range(3):
+            for attempt in range(self.max_attempts):
                 try:
                     msg = await self._client.messages.create(
                         model=self._model_for(role, model),
                         max_tokens=max_tokens,
-                        temperature=temperature,
                         system=system,
                         messages=[{"role": "user", "content": user}],
                     )
                     return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
-                except (anthropic.RateLimitError, anthropic.APIStatusError, anthropic.APIConnectionError):
-                    if attempt == 2:
-                        raise
+                except anthropic.APIStatusError as e:
+                    if e.status_code not in _RETRYABLE_STATUS:
+                        detail = getattr(e, "message", "") or str(e)
+                        raise LLMFatalError(
+                            f"Anthropic API rejected the request ({e.status_code}): {detail}") from e
+                    last = e
+                except anthropic.APIConnectionError as e:
+                    last = e
+                if attempt + 1 < self.max_attempts:
                     await asyncio.sleep(2.0 * (attempt + 1))
-        raise LLMError("unreachable")
+        raise LLMUnavailableError(f"Anthropic API unavailable after {self.max_attempts} attempts: {last}")
 
 
 class OpenAICompatLLM:

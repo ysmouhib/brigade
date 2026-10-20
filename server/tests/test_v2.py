@@ -96,6 +96,52 @@ async def test_sampled_first_attempt_finds_the_one_passing_candidate():
                for e in job.events)
 
 
+async def test_sampled_candidates_get_different_prompts():
+    """Claude no longer accepts a temperature spread, so the k samples must differ by prompt."""
+    seen: list[str] = []
+    base = _handler({"lemma_1": ["alpha", "beta", "gamma"], "thm_main": "exact lemma_1"})
+
+    def handler(role, user, n):
+        if role == "prover" and "TARGET lean_name: lemma_1" in user:
+            seen.append(user)
+        return base(role, user, n)
+
+    lean = FakeLean(rules={"lemma_1": (["gamma"], "error: unsolved goals"),
+                           "thm_main": (["lemma_1"], "error: unsolved goals")})
+    cfg = demo_config(max_rounds=1, verify_policy="full", prove_samples=3)
+    await Orchestrator(Job(problem="Prove the main claim."), ScriptedLLM(handler), lean, cfg).run()
+    assert len(seen) == 3 and len(set(seen)) == 3, "each sampled candidate needs its own approach"
+
+
+async def test_fatal_llm_error_stops_the_job_with_a_clear_message():
+    from app.llm import LLMFatalError
+
+    class Rejecting:
+        async def complete(self, **_kw):
+            raise LLMFatalError("Anthropic API rejected the request (404): model not found")
+
+    job = Job(problem="Prove the main claim.")
+    await Orchestrator(job, Rejecting(), FakeLean(), demo_config(max_rounds=2)).run()
+    assert job.status == JobStatus.ERROR
+    assert job.llm_calls == 1, "no budget may be burned on a request that can never succeed"
+    assert "model not found" in job.events[-1].content
+
+
+async def test_unreachable_api_ends_as_error_not_exhausted():
+    """An outage is an infrastructure failure, not a failed proof search."""
+    from app.llm import LLMUnavailableError
+
+    class Down:
+        async def complete(self, **_kw):
+            raise LLMUnavailableError("Anthropic API unavailable after 3 attempts: connection refused")
+
+    job = Job(problem="Prove the main claim.")
+    await Orchestrator(job, Down(), FakeLean(), demo_config(max_rounds=2)).run()
+    assert job.status == JobStatus.ERROR
+    assert "unreachable" in job.events[-1].content
+    assert job.llm_calls <= 4
+
+
 async def test_sampled_attempt_failure_feeds_repair_cycle():
     lean = FakeLean(rules={"lemma_1": (["delta"], "error: unsolved goals in lemma_1"),
                            "thm_main": (["lemma_1"], "error: unsolved goals")})
