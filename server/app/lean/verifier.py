@@ -314,5 +314,8 @@ def make_verifier(cfg) -> LeanVerifier:
             raise RuntimeError("LEAN_MODE=repl requires LEAN_REPL_BIN")
         return ReplLeanVerifier(cfg.lean_project_dir, cfg.lean_repl_bin,
                                 cfg.lean_timeout_s, cfg.max_heartbeats)
-    from ..testing import default_fake_lean
-    return default_fake_lean()
+    if cfg.lean_mode == "fake":
+        from ..testing import default_fake_lean
+        return default_fake_lean()
+    # Never fall back to the simulator: it accepts any proof of a theorem it has no rule for.
+    raise ValueError(f"unknown LEAN_MODE {cfg.lean_mode!r} (expected fake, file or repl)")

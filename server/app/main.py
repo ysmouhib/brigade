@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from .config import Config
-from .lean.verifier import LeanVerifier, make_verifier
+from .lean.verifier import FakeLean, LeanVerifier, make_verifier
 from .llm import LLM, AnthropicLLM, OpenAICompatLLM, RoutedLLM
 from .models import Job, JobStatus, NewJobRequest
 from .orchestrator import Orchestrator
@@ -100,6 +100,12 @@ def create_app(cfg: Optional[Config] = None,
         if not cfg.anthropic_api_key:
             raise HTTPException(409, "No Anthropic API key configured. Open Settings and "
                                      "paste your key, or tick 'offline demo' for this job.")
+        if isinstance(app.state.lean, FakeLean):
+            # The simulator accepts any proof of a theorem it has no rule for, so it must
+            # never judge a real model's output.
+            raise HTTPException(409, "Real Claude jobs need a real Lean verifier, but the server "
+                                     "runs with LEAN_MODE=fake. Run the Lean setup, set "
+                                     "LEAN_MODE=file or repl, and restart; or tick 'offline demo'.")
         if app.state.real_llm is None or app.state.real_llm_key != cfg.anthropic_api_key:
             llm_: LLM = AnthropicLLM(cfg.anthropic_api_key, cfg.chef_model, cfg.worker_model)
             if cfg.prover_base_url and cfg.prover_model:
