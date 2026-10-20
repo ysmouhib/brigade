@@ -5,7 +5,7 @@ and which require a real Lean toolchain (and an API key) on your machine. Nothin
 in the first list is aspirational — every claim is asserted by code that runs in CI
 on every push.
 
-## Verified by the test suite (`cd server && python -m pytest -q` → 39 passed)
+## Verified by the test suite (`cd server && python -m pytest -q` → all pass)
 
 Coverage by file:
 
@@ -85,6 +85,27 @@ Coverage by file:
   replay engine and any problem other than the fixed recorded scenario returns 409
   with an explanation, and the served UI page carries the honest labeling.
 
+### Contract tests (added in Phase 0)
+
+The tests above all run on fakes, which is how three real-mode failures went
+unnoticed. These tests pin the boundaries to real formats:
+
+- `tests/test_llm_contract.py` — the installed `anthropic` SDK itself, over a
+  mocked transport: no unsupported sampling parameters are sent, roles route to
+  the right model, a 400 stops the job without retries, overload is retried.
+- `tests/test_config.py` — `.env` values with inline comments and quotes parse;
+  unknown `LEAN_MODE`/`VERIFY_POLICY`/`RETRIEVAL` values and bad integers fail
+  loudly; real Claude jobs refuse the fake verifier; `.env.example` has no inline
+  comments; `scripts/load_env.ps1` is exercised wherever PowerShell exists.
+- `tests/test_repl_contract.py` — the Lean REPL's JSON format (a reply recorded
+  in the REPL's own test suite at v4.15.0, plus its `info` severity): sorry
+  warnings count, `#print axioms` is read, the audit fails closed.
+- `tests/test_skeptic_safety.py` — oversized candidates are skipped, a runaway
+  probe times out in its worker process while the event loop keeps running,
+  numeric refutations are labeled as not Lean-checked.
+- `tests/test_lean_fixtures.py` — replays real `lake env lean` and REPL outputs
+  from `tests/fixtures/lean/`. Skipped until you record them (step A below).
+
 ## Verified over real HTTP (`scripts/live_e2e.sh`)
 
 Boots uvicorn (`FAKE_LLM=1 LEAN_MODE=fake`), submits the demo problem with curl,
@@ -122,6 +143,15 @@ theorem brigade_smoke (n : ℕ) : Even (n ^ 2 + n) := by
   rw [h]
   exact Nat.even_mul_succ_self n
 ```
+
+Then record the contract fixtures from your real toolchain and run the suite:
+
+```bash
+python3 scripts/record_lean_fixtures.py
+cd server && python -m pytest -q tests/test_lean_fixtures.py
+```
+
+Commit `server/tests/fixtures/lean/`; re-record after every Lean upgrade.
 
 If it prints the axiom line and exits 0, the verifier backend is good.
 

@@ -6,7 +6,7 @@ Write-Host "== Brigade: Windows demo setup ==" -ForegroundColor Yellow
 python --version
 if (-not (Test-Path ".venv")) { python -m venv .venv }
 & .\.venv\Scripts\pip.exe install --quiet -e server/ pytest pytest-asyncio
-Write-Host "-- running the test suite (should say '39 passed')" -ForegroundColor Yellow
+Write-Host "-- running the test suite (every test should pass)" -ForegroundColor Yellow
 Push-Location server
 & ..\.venv\Scripts\python.exe -m pytest -q
 Pop-Location

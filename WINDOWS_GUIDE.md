@@ -18,7 +18,7 @@ powershell -ExecutionPolicy Bypass -File scripts\windows_demo.ps1
 ```
 
 This creates `.venv`, installs the server, runs the test suite (should say
-`39 passed`), and starts the server. Open http://localhost:8811 and pick the
+every test passing), and starts the server. Open http://localhost:8811 and pick the
 "Scripted replay" engine in the New Problem form.
 
 ## Running the server day-to-day

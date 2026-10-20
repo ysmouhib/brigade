@@ -94,7 +94,7 @@ and no prover ever runs.
 ```
 server/            FastAPI + orchestrator + agents + verifier backends (Python 3.10+)
 server/app/static/ the built-in web UI (single file, no build step, works offline)
-server/tests/      39 tests: unit, invariant, end-to-end, API-level, strategic policy, v2 power features
+server/tests/      unit, invariant, end-to-end, API-level, strategic-policy and contract tests
 scripts/           setup_lean.sh, run_server.sh, live_e2e.sh, bench.py (+ PowerShell variants)
 lean/              populated by setup_lean.sh (pinned Mathlib project + optional REPL)
 Dockerfile         optional full image (server + Lean); large, see warning inside
@@ -111,7 +111,7 @@ gate repair, proof repair, decomposition, axiom audit).
 ```bash
 cd server
 pip install -e . pytest pytest-asyncio
-python -m pytest -q                    # 39 tests
+python -m pytest -q                    # all pass; Lean fixture tests skip until recorded
 FAKE_LLM=1 LEAN_MODE=fake python -m uvicorn app.main:app --port 8811
 # then open http://localhost:8811 in a browser
 # or, self-contained with a printed agent timeline:

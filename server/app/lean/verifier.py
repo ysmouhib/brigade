@@ -126,6 +126,35 @@ WARN_LINE = re.compile(r"^[^\n:]*:\d+:\d+:\s*warning:\s*(.*)$", re.MULTILINE)
 AXIOM_LINE = re.compile(r"depends on axioms:\s*\[([^\]]*)\]")
 
 
+def parse_lean_output(rc: int, out: str) -> VerifyResult:
+    """Interpret the exit code and combined output of `lake env lean <file>`."""
+    errors = ERROR_LINE.findall(out)
+    warnings = WARN_LINE.findall(out)
+    # Any warning mentioning sorry counts (the wording has varied across Lean versions);
+    # erring this way can only reject a proof, never accept one.
+    sorries = sum(1 for w in warnings if "sorry" in w)
+    if rc != 0 and not errors:
+        errors = [out.strip()[:500] or f"lean exited with code {rc}"]
+    return VerifyResult(ok=(rc == 0 and not errors), errors=errors, sorries=sorries,
+                        warnings=warnings)
+
+
+def parse_axiom_report(rc: int, out: str, name: str) -> AuditResult:
+    """Interpret `#print axioms <name>` output; anything unexpected fails closed."""
+    errors = ERROR_LINE.findall(out)
+    if errors:
+        return AuditResult(ok=False, note="; ".join(errors[:2]))
+    m = AXIOM_LINE.search(out)
+    if m:
+        axioms = [a.strip() for a in m.group(1).split(",") if a.strip()]
+        bad = [a for a in axioms if a not in STANDARD_AXIOMS]
+        return AuditResult(ok=not bad, axioms=axioms,
+                           note="" if not bad else f"non-standard axioms: {bad}")
+    if f"'{name}' does not depend on any axioms" in out:
+        return AuditResult(ok=True, axioms=[])
+    return AuditResult(ok=False, note=f"could not parse axiom report (rc={rc}): {out[:300]}")
+
+
 class FileLeanVerifier:
     """Write `code` into a scratch .lean file inside a Mathlib project and run `lake env lean` on it."""
 
@@ -140,7 +169,7 @@ class FileLeanVerifier:
         scratch_dir = os.path.join(self.project_dir, ".brigade_scratch")
         os.makedirs(scratch_dir, exist_ok=True)
         path = os.path.join(scratch_dir, f"Check_{uuid.uuid4().hex[:10]}.lean")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:   # Lean source is UTF-8 (ℕ, ∀, ...)
             f.write(self.header + code + "\n")
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -165,25 +194,12 @@ class FileLeanVerifier:
             code = f"{context}\n\n{code}"
         async with self._lock:
             rc, out = await self._run(code)
-        errors = ERROR_LINE.findall(out)
-        warnings = WARN_LINE.findall(out)
-        sorries = sum(1 for w in warnings if "sorry" in w) + out.count("declaration uses 'sorry'")
-        if rc != 0 and not errors:
-            errors = [out.strip()[:500] or f"lean exited with code {rc}"]
-        return VerifyResult(ok=(rc == 0 and not errors), errors=errors, sorries=sorries, warnings=warnings)
+        return parse_lean_output(rc, out)
 
     async def axiom_audit(self, code: str, name: str) -> AuditResult:
         async with self._lock:
             rc, out = await self._run(code + f"\n#print axioms {name}\n")
-        m = AXIOM_LINE.search(out)
-        if not m:
-            if f"'{name}' does not depend on any axioms" in out:
-                return AuditResult(ok=True, axioms=[])
-            return AuditResult(ok=False, note=f"could not parse axiom report (rc={rc}): {out[:300]}")
-        axioms = [a.strip() for a in m.group(1).split(",") if a.strip()]
-        bad = [a for a in axioms if a not in STANDARD_AXIOMS]
-        return AuditResult(ok=not bad, axioms=axioms,
-                           note="" if not bad else f"non-standard axioms: {bad}")
+        return parse_axiom_report(rc, out, name)
 
     async def close(self) -> None:
         pass
@@ -286,7 +302,7 @@ class ReplLeanVerifier:
         goals = [s.get("goal", "") for s in sorry_items if s.get("goal")]
         # The REPL lists `sorry` syntax it elaborated; a sorryAx produced any other way
         # (a tactic, a metaprogram) only shows up as Lean's warning, so count both.
-        sorry_warnings = sum(1 for w in warnings if "declaration uses 'sorry'" in w)
+        sorry_warnings = sum(1 for w in warnings if "sorry" in w)
         return VerifyResult(ok=not errors, errors=errors,
                             sorries=max(len(sorry_items), sorry_warnings),
                             warnings=warnings, goals=goals, infos=infos)
