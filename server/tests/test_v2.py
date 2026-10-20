@@ -133,6 +133,58 @@ async def test_cascade_failure_falls_through_to_provers():
     assert lemma.lean_proof == "alpha"   # the LLM proof, not the cascade
 
 
+# ------------------------------------------------------------------ quick attempt
+class _Recording(ScriptedLLM):
+    def __init__(self, handler):
+        super().__init__(handler)
+        self.roles: list[str] = []
+
+    async def complete(self, *, role, **kw):
+        self.roles.append(role)
+        return await super().complete(role=role, **kw)
+
+
+async def test_quick_attempt_proves_an_easy_claim_without_planning():
+    """Before any brainstorm or plan, the claim is formalized as stated and Lean's own
+    automation gets one try. Easy claims then cost a handful of calls, not a full plan."""
+    lean = _CascadeLean({"thm_main": (["omega"], "error: unsolved goals")},
+                        winner="omega", reported_for="thm_main")
+    llm = _Recording(_handler({}, forbid={"thm_main"}))
+    cfg = demo_config(max_rounds=1, verify_policy="full", tactic_cascade=True)
+    job = Job(problem="Prove the main claim.")
+    await Orchestrator(job, llm, lean, cfg).run()
+    assert job.status == JobStatus.PROVED
+    assert not {"brainstormer", "strategist", "prover"} & set(llm.roles)
+    assert [n.lean_name for n in job.nodes.values()] == ["thm_main"]
+    assert job.final_lean == "theorem thm_main : True := by\n  omega"
+    assert any(e.type == "axiom_audit" for e in job.events)
+
+
+async def test_quick_attempt_that_fails_leaves_no_trace_in_the_plan():
+    lean = _CascadeLean({"lemma_1": (["ring"], "error: unsolved goals"),
+                         "thm_main": (["lemma_1"], "error: unsolved goals")}, winner="ring")
+    llm = _Recording(_handler({"thm_main": "exact lemma_1"}, forbid={"lemma_1"}))
+    cfg = demo_config(max_rounds=1, verify_policy="full", tactic_cascade=True)
+    job = Job(problem="Prove the main claim.")
+    await Orchestrator(job, llm, lean, cfg).run()
+    assert job.status == JobStatus.PROVED
+    assert "brainstormer" in llm.roles                 # the full pipeline ran
+    assert sorted(n.lean_name for n in job.nodes.values()) == ["lemma_1", "thm_main"]
+    assert job.root().lean_name == "thm_main"
+    assert any(e.type == "quick_attempt" for e in job.events)
+
+
+async def test_quick_attempt_can_be_switched_off():
+    lean = _CascadeLean({"thm_main": (["omega"], "error: unsolved goals")},
+                        winner="omega", reported_for="thm_main")
+    llm = _Recording(_handler({"lemma_1": "omega", "thm_main": "omega"}))
+    cfg = demo_config(max_rounds=1, verify_policy="full", tactic_cascade=True,
+                      quick_attempt=False)
+    job = Job(problem="Prove the main claim.")
+    await Orchestrator(job, llm, lean, cfg).run()
+    assert "brainstormer" in llm.roles
+
+
 # ------------------------------------------------------------------ sampled attempts
 async def test_sampled_first_attempt_finds_the_one_passing_candidate():
     lean = FakeLean(rules={"lemma_1": (["gamma"], "error: unsolved goals"),

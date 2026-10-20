@@ -179,6 +179,13 @@ are spent on a lemma, one Lean call tries the powerful closers
 surprising fraction of decomposed lemmas fall to pure automation — Lean's own
 tactics solve roughly a third of miniF2F with no model at all — so this converts
 many LLM round-trips into a single cheap check.
+Each branch must close the goal, and only the tactic that won is kept in the proof
+(re-checked on its own first).
+
+**Quick attempt (`QUICK_ATTEMPT=1`, default on).** Before any brainstorming or
+planning, the claim is formalized as stated and the cascade gets one try at it. Easy
+claims end there after one formalizer call; otherwise the attempt is dropped and the
+full pipeline runs.
 
 **Sampled first attempts (`PROVE_SAMPLES=k`, default 1).** Every published system
 samples: pass@32 and up is the norm. With k>1 Brigade fires k prover candidates in

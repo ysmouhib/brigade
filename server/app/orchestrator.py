@@ -288,6 +288,10 @@ class Orchestrator:
         except (LLMError, numeric.ProbeError) as e:
             self.emit("worker", "skeptic", "probe_skipped", f"skeptic inconclusive: {e}")
 
+        # -------- Quick attempt: the claim as stated, Lean's automation only --------
+        if cfg.quick_attempt and cfg.tactic_cascade and await self._quick_attempt():
+            return
+
         # -------- Rounds: brainstorm → plan → formalize → prove → assemble --------
         feedback = ""
         for rnd in range(1, cfg.max_rounds + 1):
@@ -346,27 +350,9 @@ class Orchestrator:
 
             # 5. assemble + final verification + axiom audit
             if proved:
-                job.phase = "assemble"
-                final_code = "\n\n".join(self._theorem_text(n, n.lean_proof)
-                                         for n in self._topo_order())
-                res = await self._check(final_code)
-                lint = lint_proof(final_code)
-                if res.ok and res.sorries == 0 and not lint:
-                    audit = await self.lean.axiom_audit(final_code, root.lean_name)
-                    self.emit("lean", "lean_verifier", "axiom_audit",
-                              f"ok={audit.ok} axioms={audit.axioms} {audit.note}")
-                    if audit.ok:
-                        job.final_lean = final_code
-                        job.status = JobStatus.PROVED
-                        job.phase = "proved"
-                        self.emit("chef", "chef", "proved",
-                                  f"Final theorem '{root.lean_name}' verified by Lean "
-                                  f"(round {rnd}, {job.lean_calls} Lean checks, {job.llm_calls} LLM calls).")
-                        await self._write_report()
-                        return
-                    feedback = f"axiom audit failed: {audit.note}"
-                else:
-                    feedback = f"final assembly failed: {lint or res.errors[:3]}"
+                done, feedback = await self._assemble(root, f"round {rnd}")
+                if done:
+                    return
                 self.emit("chef", "chef", "assembly_failed", feedback)
             else:
                 feedback = self._failures("proving failed")
@@ -387,9 +373,53 @@ class Orchestrator:
         await self._write_report()
 
     # ---------------------------------------------------------------- phases
-    async def _formalize_node(self, node: ProofNode) -> bool:
+    async def _assemble(self, root: ProofNode, how: str) -> tuple[bool, str]:
+        """Final check of the whole file + axiom audit. Returns (proved, feedback)."""
+        job = self.job
+        job.phase = "assemble"
+        final_code = "\n\n".join(self._theorem_text(n, n.lean_proof) for n in self._topo_order())
+        res = await self._check(final_code)
+        lint = lint_proof(final_code)
+        if not (res.ok and res.sorries == 0 and not lint):
+            return False, f"final assembly failed: {lint or res.errors[:3]}"
+        audit = await self.lean.axiom_audit(final_code, root.lean_name)
+        self.emit("lean", "lean_verifier", "axiom_audit",
+                  f"ok={audit.ok} axioms={audit.axioms} {audit.note}")
+        if not audit.ok:
+            return False, f"axiom audit failed: {audit.note}"
+        job.final_lean = final_code
+        job.status = JobStatus.PROVED
+        job.phase = "proved"
+        self.emit("chef", "chef", "proved",
+                  f"Final theorem '{root.lean_name}' verified by Lean "
+                  f"({how}, {job.lean_calls} Lean checks, {job.llm_calls} LLM calls).")
+        await self._write_report()
+        return True, ""
+
+    async def _quick_attempt(self) -> bool:
+        """Formalize the claim as stated and give Lean's automation one try before any
+        planning: one formalizer call and a few Lean checks. Easy claims end here; for
+        the rest the node is removed, so the planned tree starts clean."""
+        job = self.job
+        job.phase = "quick"
+        root = self._add_node(job.problem, "", None, kind="theorem")
+        job.root_id = root.id
+        if (await self._formalize_node(root, retries=1, announce_stuck=False)
+                and await self._try_cascade(root)):
+            done, _ = await self._assemble(root, "quick attempt, no planning")
+            if done:
+                return True
+        self.emit("chef", "chef", "quick_attempt",
+                  "Lean's automation did not close the claim as stated; planning a proof.")
+        job.nodes.pop(root.id, None)
+        self._names.discard(root.lean_name)
+        job.root_id = None
+        return False
+
+    async def _formalize_node(self, node: ProofNode, retries: int | None = None,
+                              announce_stuck: bool = True) -> bool:
         errors: list[str] = []
-        for attempt in range(self.cfg.statement_retries):
+        for attempt in range(retries or self.cfg.statement_retries):
             try:
                 out = await self._llm(agents.formalize(self.llm, node, self.job.problem, errors,
                                                        retrieved=await self._retrieve(node)))
@@ -415,8 +445,9 @@ class Orchestrator:
             errors = res.errors
             node.last_errors = errors
         node.status = NodeStatus.STUCK
-        self.emit("chef", "chef", "statement_stuck",
-                  f"{node.lean_name}: statement never elaborated: {errors[:2]}", node.id)
+        if announce_stuck:
+            self.emit("chef", "chef", "statement_stuck",
+                      f"{node.lean_name}: statement never elaborated: {errors[:2]}", node.id)
         return False
 
     async def _prove_subtree(self, node: ProofNode) -> bool:

@@ -94,6 +94,8 @@ class Config:
     #     'strategic' adds per-lemma numeric probes and batches sibling proof checks ---
     verify_policy: str = field(default_factory=lambda: _choice("VERIFY_POLICY", "strategic", VERIFY_POLICIES))
     # --- proving power ---
+    # Before any planning, formalize the claim as stated and let the cascade try it once.
+    quick_attempt: bool = field(default_factory=lambda: _b("QUICK_ATTEMPT", True))
     tactic_cascade: bool = field(default_factory=lambda: _b("TACTIC_CASCADE", True))  # try omega/ring/simp/... before any LLM prover call
     prove_samples: int = field(default_factory=lambda: _int("PROVE_SAMPLES", 1))  # parallel proof candidates on the first attempt
     retrieval: str = field(default_factory=lambda: _choice("RETRIEVAL", "off", RETRIEVAL_BACKENDS))
