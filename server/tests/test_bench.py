@@ -106,6 +106,7 @@ def test_end_to_end_against_a_live_server(tmp_path, monkeypatch):
     assert int(rows[0]["llm_calls"]) > 0 and int(rows[0]["lean_calls"]) > 0
     summary = (run_dir / "summary.md").read_text()
     assert "1/1 as expected" in summary and "| demo |" in summary
+    assert "- Git: `server " in summary            # the commit the server reported
     job = json.loads((run_dir / "jobs" / "demo.json").read_text())
     assert job["status"] == "proved" and len(job["events"]) == job["event_count"]
 

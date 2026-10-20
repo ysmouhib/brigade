@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 from typing import Optional
@@ -23,7 +24,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from .config import Config
+from .config import REPO_ROOT, Config
 from .lean.verifier import FakeLean, LeanVerifier, make_verifier
 from .llm import LLM, AnthropicLLM, OpenAICompatLLM, RoutedLLM
 from .models import Job, JobStatus, NewJobRequest
@@ -51,10 +52,23 @@ def _persist_key_to_env(key: str) -> str:
     return str(env_path)
 
 
+def _git_version() -> str:
+    """Short commit of the code this process loaded ("+dirty" with uncommitted changes)."""
+    try:
+        run = lambda *a: subprocess.run(["git", *a], cwd=REPO_ROOT, capture_output=True,  # noqa: E731
+                                        text=True, timeout=5).stdout.strip()
+        sha = run("rev-parse", "--short", "HEAD")
+        return (sha + ("+dirty" if run("status", "--porcelain", "--untracked-files=no") else "")
+                if sha else "unknown")
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+
 def create_app(cfg: Optional[Config] = None,
                llm: Optional[LLM] = None,
                lean: Optional[LeanVerifier] = None) -> FastAPI:
     cfg = cfg or Config()
+    server_git = _git_version()    # read once: a later pull does not change the running code
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -150,6 +164,7 @@ def create_app(cfg: Optional[Config] = None,
                 "llm_label": _llm_label(),
                 "llm_endpoint": (urlsplit(cfg.openai_base_url).hostname or ""
                                  if cfg.llm_provider == "openai" else ""),
+                "server_git": server_git,
                 "chef_model": cfg.chef_model,
                 "worker_model": cfg.worker_model,
                 "has_key": bool(cfg.anthropic_api_key) or cfg.fake_llm

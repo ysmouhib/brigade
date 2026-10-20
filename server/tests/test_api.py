@@ -203,3 +203,17 @@ async def test_ui_explains_where_an_openai_compatible_key_lives():
     assert 'id="engine_real"' in html and "llm_label" in html
     assert 'id="s_compat"' in html and "OPENAI_API_KEY" in html
     assert "Only the Claude + Lean engine" not in html
+
+
+def test_server_reports_the_commit_it_runs(monkeypatch):
+    """Experiment records must name the code the server actually loaded, which can differ
+    from the files on disk after a pull without a restart."""
+    import app.main as main_mod
+    monkeypatch.setattr(main_mod, "_git_version", lambda: "abc1234")
+    app = create_app(demo_config(), demo_llm(), default_fake_lean())
+
+    async def go():
+        async with app.router.lifespan_context(app):
+            async with await _client(app) as c:
+                return (await c.get("/health")).json()
+    assert asyncio.run(go())["server_git"] == "abc1234"

@@ -244,7 +244,10 @@ def main(argv: list[str] | None = None) -> int:
     out = pathlib.Path(a.out) / f"{run}-{path.stem}"
     (out / "jobs").mkdir(parents=True, exist_ok=True)
     models = "/".join(x for x in (health.get("chef_model"), health.get("worker_model")) if x)
-    meta = {"run": run, "set": path.name, "git": git_sha(),
+    disk, served = git_sha(), health.get("server_git", "")
+    git = (f"server {served}" + (f" (files on disk: {disk})" if served and disk != served else "")
+           if served else disk)
+    meta = {"run": run, "set": path.name, "git": git,
             "server_desc": f"{health.get('llm_mode')} {models}".strip()
                            + f", LEAN_MODE={health.get('lean_mode')}, "
                              f"verify_policy={health.get('verify_policy')}",
