@@ -79,6 +79,8 @@ class Config:
     lean_project_dir: str = field(default_factory=lambda: _repo_path("LEAN_PROJECT_DIR", "lean/BrigadeLean"))
     lean_repl_bin: str = field(default_factory=lambda: _repo_path("LEAN_REPL_BIN"))
     lean_timeout_s: int = field(default_factory=lambda: _int("LEAN_TIMEOUT_S", 180))
+    # one-time Mathlib load when the REPL starts (slow on a cold disk cache)
+    lean_startup_timeout_s: int = field(default_factory=lambda: _int("LEAN_STARTUP_TIMEOUT_S", 1200))
     max_heartbeats: int = field(default_factory=lambda: _int("LEAN_MAX_HEARTBEATS", 1000000))
     # --- budgets (per job defaults; overridable per request) ---
     max_rounds: int = field(default_factory=lambda: _int("MAX_ROUNDS", 2))

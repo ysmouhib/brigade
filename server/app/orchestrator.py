@@ -56,6 +56,7 @@ class Orchestrator:
         self._seq = 0
         self._names: set[str] = set()
         self._unavailable_in_a_row = 0
+        self._said_lean_waiting = False
 
     # ---------------------------------------------------------------- events
     def emit(self, level: str, agent: str, type_: str, content: str, node_id: str | None = None):
@@ -86,6 +87,11 @@ class Orchestrator:
         if self.job.lean_calls >= self.cfg.max_lean_calls:
             raise BudgetExceeded("Lean call budget exhausted")
         self.job.lean_calls += 1
+        if not getattr(self.lean, "ready", True) and not self._said_lean_waiting:
+            self._said_lean_waiting = True
+            self.emit("lean", "lean_verifier", "waiting",
+                      "Lean is still loading Mathlib (once per server start); "
+                      "checks continue as soon as it is ready.", node.id if node else None)
         res = await self.lean.check(code, context=context)
         self.emit("lean", "lean_verifier", "lean_check", res.summary(),
                   node.id if node else None)

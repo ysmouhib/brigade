@@ -68,6 +68,8 @@ def create_app(cfg: Optional[Config] = None,
         else:
             app.state.lean = make_verifier(cfg)
         app.state.store = Store(cfg.db_path)
+        if hasattr(app.state.lean, "warm_up"):   # load Mathlib now, not inside the first job
+            app.state.warmup = asyncio.create_task(app.state.lean.warm_up())
         try:
             yield
         finally:
@@ -133,6 +135,7 @@ def create_app(cfg: Optional[Config] = None,
     async def health():
         return {"ok": True,
                 "lean_mode": cfg.lean_mode,
+                "lean_ready": bool(getattr(app.state.lean, "ready", True)),
                 "llm_mode": "fake" if cfg.fake_llm else cfg.llm_provider,
                 "has_key": bool(cfg.anthropic_api_key) or cfg.fake_llm
                            or (cfg.llm_provider == "openai" and bool(cfg.openai_api_key))

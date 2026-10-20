@@ -158,6 +158,34 @@ def parse_axiom_report(rc: int, out: str, name: str) -> AuditResult:
     return AuditResult(ok=False, note=f"could not parse axiom report (rc={rc}): {out[:300]}")
 
 
+async def spawn_process_group(*args, **kw) -> asyncio.subprocess.Process:
+    """Start a process in its own process group, so kill_process_tree can stop it and
+    everything it started (`lake env X` runs X as a child of lake)."""
+    if os.name == "posix":
+        kw["start_new_session"] = True
+    return await asyncio.create_subprocess_exec(*args, **kw)
+
+
+async def kill_process_tree(proc) -> None:
+    """Kill a process started by spawn_process_group together with its children."""
+    pid = getattr(proc, "pid", -1) if proc is not None else -1
+    if pid is None or pid <= 0:
+        return
+    try:
+        if os.name == "posix":
+            import signal
+            os.killpg(pid, signal.SIGKILL)
+        else:   # Windows: /T takes the child processes along
+            import subprocess
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True)
+    except (ProcessLookupError, PermissionError, OSError):
+        pass
+    try:
+        await asyncio.wait_for(proc.wait(), timeout=5)
+    except Exception:  # noqa: BLE001 - already gone or not waitable
+        pass
+
+
 class FileLeanVerifier:
     """Write `code` into a scratch .lean file inside a Mathlib project and run `lake env lean` on it."""
 
@@ -175,7 +203,7 @@ class FileLeanVerifier:
         with open(path, "w", encoding="utf-8") as f:   # Lean source is UTF-8 (ℕ, ∀, ...)
             f.write(self.header + code + "\n")
         try:
-            proc = await asyncio.create_subprocess_exec(
+            proc = await spawn_process_group(
                 "lake", "env", "lean", path,
                 cwd=self.project_dir,
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
@@ -183,7 +211,7 @@ class FileLeanVerifier:
             try:
                 out, _ = await asyncio.wait_for(proc.communicate(), timeout=self.timeout_s)
             except asyncio.TimeoutError:
-                proc.kill()
+                await kill_process_tree(proc)
                 return 124, f"error: Lean check timed out after {self.timeout_s}s"
             return proc.returncode or 0, out.decode(errors="replace")
         finally:
@@ -221,10 +249,13 @@ class ReplLeanVerifier:
     """
 
     def __init__(self, project_dir: str, repl_bin: str, timeout_s: int = 180,
-                 max_heartbeats: int = 1000000):
+                 max_heartbeats: int = 1000000, startup_timeout_s: int = 1200):
         self.project_dir = os.path.abspath(project_dir)
         self.repl_bin = repl_bin
         self.timeout_s = timeout_s
+        # Loading Mathlib reads ~5 GB of compiled files once; on a cold disk cache (e.g.
+        # in WSL) it can take minutes. Every later check reuses the loaded environment.
+        self.startup_timeout_s = startup_timeout_s
         self.max_heartbeats = max_heartbeats
         self._proc: asyncio.subprocess.Process | None = None
         self._base_env: int | None = None
@@ -235,19 +266,38 @@ class ReplLeanVerifier:
         if self._proc and self._proc.returncode is None and self._base_env is not None:
             return
         t0 = time.monotonic()
-        log.info("-> Lean REPL: starting and importing Mathlib (first time: about 1-3 min)")
-        self._proc = await asyncio.create_subprocess_exec(
-            "lake", "env", self.repl_bin,
-            cwd=self.project_dir,
-            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
+        log.info("-> Lean REPL: starting and loading Mathlib (once per server start; "
+                 "allowing up to %d min)", self.startup_timeout_s // 60)
+        await self._spawn()
         resp = await self._roundtrip({"cmd": f"import Mathlib\nset_option maxHeartbeats {self.max_heartbeats}"},
-                                     timeout=max(self.timeout_s, 300))
+                                     timeout=self.startup_timeout_s)
         self._base_env = resp.get("env")
         if self._base_env is None:
             raise RuntimeError(f"REPL failed to import Mathlib: {resp}")
         log.info("<- Lean REPL: ready in %.0fs", time.monotonic() - t0)
+
+    async def _spawn(self) -> None:
+        self._proc = await spawn_process_group(
+            "lake", "env", self.repl_bin,
+            cwd=self.project_dir,
+            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            limit=2 ** 24,   # one REPL reply line can exceed asyncio's 64 KiB default
+        )
+
+    @property
+    def ready(self) -> bool:
+        """True once Mathlib is loaded and checks will be fast."""
+        return self._base_env is not None and self._proc is not None
+
+    async def warm_up(self) -> None:
+        """Load Mathlib now (called at server start) instead of inside the first job."""
+        async with self._lock:
+            try:
+                await self._ensure_started()
+            except (asyncio.TimeoutError, RuntimeError, BrokenPipeError, OSError) as e:
+                log.info("<- Lean REPL: could not load Mathlib: %s", e or type(e).__name__)
+                await self._restart()
 
     async def _roundtrip(self, obj: dict, timeout: float) -> dict:
         assert self._proc and self._proc.stdin and self._proc.stdout
@@ -267,12 +317,8 @@ class ReplLeanVerifier:
                     continue  # multi-line JSON: keep reading
 
     async def _restart(self) -> None:
-        if self._proc:
-            try:
-                self._proc.kill()
-            except ProcessLookupError:
-                pass
-        self._proc, self._base_env = None, None
+        proc, self._proc, self._base_env = self._proc, None, None
+        await kill_process_tree(proc)   # the REPL itself, not just the `lake` wrapper
         self._ctx_envs.clear()
 
     async def _env_for(self, context: str) -> int | None:
@@ -350,7 +396,8 @@ def make_verifier(cfg) -> LeanVerifier:
         if not cfg.lean_repl_bin:
             raise RuntimeError("LEAN_MODE=repl requires LEAN_REPL_BIN")
         return ReplLeanVerifier(cfg.lean_project_dir, cfg.lean_repl_bin,
-                                cfg.lean_timeout_s, cfg.max_heartbeats)
+                                cfg.lean_timeout_s, cfg.max_heartbeats,
+                                startup_timeout_s=cfg.lean_startup_timeout_s)
     if cfg.lean_mode == "fake":
         from ..testing import default_fake_lean
         return default_fake_lean()
