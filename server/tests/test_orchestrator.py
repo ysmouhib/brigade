@@ -205,3 +205,47 @@ def test_clean_body_strips_fences_and_by():
     node = ProofNode(lean_name="foo", lean_statement="theorem foo : True")
     assert orch._clean_body(node, "```lean\nby\n  trivial\n```") == "trivial"
     assert orch._clean_body(node, "by exact trivial") == "exact trivial"
+
+
+def _orch_and_node():
+    from app.models import ProofNode
+    orch = Orchestrator(Job(problem="x"), demo_llm(), default_fake_lean(), demo_config())
+    return orch, ProofNode(lean_name="foo", lean_statement="theorem foo : True")
+
+
+def test_clean_body_keeps_uniformly_indented_tactics_as_siblings():
+    """Real failure from the first benchmark: the model indented every line by two
+    spaces; stripping only the first line's indentation made Lean read the following
+    tactics as arguments of the first ("Function expected ... argument rwa")."""
+    orch, node = _orch_and_node()
+    raw = "  have h : 0 ≤ a * a := mul_nonneg ha ha\n  rwa [pow_two] at h"
+    assert orch._clean_body(node, raw) == "have h : 0 ≤ a * a := mul_nonneg ha ha\nrwa [pow_two] at h"
+    raw = "  clear h\n  induction n with\n  | zero => simp\n  | succ k ih =>\n    simp [ih]"
+    assert orch._clean_body(node, raw) == ("clear h\ninduction n with\n| zero => simp\n"
+                                           "| succ k ih =>\n  simp [ih]")
+
+
+def test_clean_body_keeps_relative_structure():
+    orch, node = _orch_and_node()
+    raw = "\n\n    constructor\n    · exact abs_nonneg a\n    · have h := sq_abs a\n      exact h\n\n"
+    assert orch._clean_body(node, raw) == ("constructor\n· exact abs_nonneg a\n"
+                                           "· have h := sq_abs a\n  exact h")
+
+
+def test_clean_body_fenced_and_echoed_headers_keep_indentation():
+    orch, node = _orch_and_node()
+    fenced = "```lean\n  intro x\n  exact x\n```"
+    assert orch._clean_body(node, fenced) == "intro x\nexact x"
+    echoed = "theorem foo : True := by\n  have h : True := trivial\n  exact h"
+    assert orch._clean_body(node, echoed) == "have h : True := trivial\nexact h"
+    lone_by = "by\n    simp\n    ring"
+    assert orch._clean_body(node, lone_by) == "simp\nring"
+
+
+def test_clean_body_inline_first_tactic_becomes_a_sibling_of_the_rest():
+    """`theorem … := by intro h` + indented lines: the first tactic's column in the echoed
+    header is meaningless, so it is aligned with the lines below it."""
+    orch, node = _orch_and_node()
+    echoed = "theorem foo : True := by intro h\n  exact h"
+    assert orch._clean_body(node, echoed) == "intro h\nexact h"
+    assert orch._clean_body(node, "by simp\n  ring") == "simp\nring"

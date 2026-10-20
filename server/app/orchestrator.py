@@ -186,17 +186,43 @@ class Orchestrator:
         return None
 
     def _clean_body(self, node: ProofNode, raw: str) -> str:
-        """Strip a repeated header if the prover echoed the theorem line (I3)."""
-        body = raw.strip()
-        body = re.sub(r"^```(?:lean4?|lean)?\s*|\s*```$", "", body).strip()
-        if body.startswith(("theorem", "lemma")):
-            m = re.search(r":=\s*by\b", body)
-            body = body[m.end():].strip() if m else body
-        if body.startswith("by\n") or body == "by":
-            body = body[2:].strip()
-        elif body.startswith("by "):
-            body = body[3:].strip()
-        return textwrap.dedent(body)
+        """Normalize a prover reply to a bare tactic block, keeping its line structure.
+
+        Strips code fences, an echoed theorem header (I3: the pinned statement is never
+        taken from the reply) and a leading `by`, then removes the indentation common to
+        all lines. The first line's indentation is never stripped on its own: doing so
+        made Lean read every following tactic as part of the first one.
+        """
+        text = raw.replace("\r\n", "\n").replace("\t", "    ")
+        fence = re.search(r"```[^\n]*\n(.*?)(?:```|\Z)", text, re.DOTALL)
+        if fence:
+            text = fence.group(1)
+        inline_first = False       # the first tactic sat on the header / `by` line
+        if text.lstrip().startswith(("theorem", "lemma")):
+            m = re.search(r":=\s*by\b", text)
+            if m:
+                text, inline_first = text[m.end():], True
+        lines = text.split("\n")
+        while lines and not lines[0].strip():
+            lines.pop(0)
+            inline_first = False
+        while lines and not lines[-1].strip():
+            lines.pop()
+        if not lines:
+            return ""
+        first = lines[0].strip()
+        if first == "by":
+            lines.pop(0)
+            inline_first = False
+        elif first.startswith("by "):
+            lines[0], inline_first = first[3:], True
+        if inline_first and len(lines) > 1:
+            rest = [ln for ln in lines[1:] if ln.strip()]
+            pad = min(len(ln) - len(ln.lstrip()) for ln in rest) if rest else 0
+            lines[0] = " " * pad + lines[0].strip()
+        elif inline_first:
+            lines[0] = lines[0].strip()
+        return textwrap.dedent("\n".join(lines)).strip("\n").rstrip()
 
     # ---------------------------------------------------------------- node creation
     def _add_node(self, informal: str, sketch: str, parent: ProofNode | None,
