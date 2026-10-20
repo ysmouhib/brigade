@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/ysmouhib/brigade/actions/workflows/ci.yml/badge.svg)](https://github.com/ysmouhib/brigade/actions)
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Lean 4](https://img.shields.io/badge/Lean-4.15.0%20%2B%20Mathlib-9d76e0.svg)](scripts/setup_lean.sh)
+[![Lean 4](https://img.shields.io/badge/Lean-4.35.0%20%2B%20Mathlib-9d76e0.svg)](scripts/setup_lean.sh)
 ![A genuine run, end to end: every node of the proof tree verified by Lean, axiom audit clean, final file compiled whole](docs/genuine-run.png)
 
 > **Origin:** Brigade began as a private project in 2024. This repository was
@@ -125,7 +125,7 @@ can see the full machinery run before configuring anything. On Windows, see
 ## Quickstart 2 — real mode (Anthropic + Lean)
 
 ```bash
-bash scripts/setup_lean.sh             # ~5-10 GB; pins lean4/mathlib4/repl to v4.15.0
+bash scripts/setup_lean.sh             # ~5-10 GB; pins lean4/mathlib4/repl to v4.35.0
 cp .env.example .env                   # put your ANTHROPIC_API_KEY in it
 bash scripts/run_server.sh
 ```

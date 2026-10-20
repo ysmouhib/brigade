@@ -9,8 +9,13 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
 _INLINE_COMMENT = re.compile(r"(?:^|\s)#.*$")
+
+# Repository root: where .env and scripts/setup_lean.sh put things. The server itself
+# runs from server/, so relative paths are resolved against this, not the working dir.
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 LEAN_MODES = ("fake", "file", "repl")
 VERIFY_POLICIES = ("full", "strategic")
@@ -25,6 +30,14 @@ def _env(name: str, default: str = "") -> str:
     if len(val) >= 2 and val[0] == val[-1] and val[0] in "\"'":
         val = val[1:-1]
     return val
+
+
+def _repo_path(name: str, default: str = "") -> str:
+    val = _env(name, default)
+    if not val:
+        return ""
+    p = Path(val).expanduser()
+    return str(p if p.is_absolute() else (REPO_ROOT / p).resolve())
 
 
 def _b(name: str, default: bool = False) -> bool:
@@ -56,8 +69,9 @@ class Config:
     chef_model: str = field(default_factory=lambda: _env("CHEF_MODEL", "claude-opus-4-8"))
     worker_model: str = field(default_factory=lambda: _env("WORKER_MODEL", "claude-sonnet-4-6"))
     # --- lean ---
-    lean_project_dir: str = field(default_factory=lambda: _env("LEAN_PROJECT_DIR", "../lean/BrigadeLean"))
-    lean_repl_bin: str = field(default_factory=lambda: _env("LEAN_REPL_BIN"))
+    # paths relative to the repository root, as written in .env and by setup_lean.sh
+    lean_project_dir: str = field(default_factory=lambda: _repo_path("LEAN_PROJECT_DIR", "lean/BrigadeLean"))
+    lean_repl_bin: str = field(default_factory=lambda: _repo_path("LEAN_REPL_BIN"))
     lean_timeout_s: int = field(default_factory=lambda: _int("LEAN_TIMEOUT_S", 180))
     max_heartbeats: int = field(default_factory=lambda: _int("LEAN_MAX_HEARTBEATS", 1000000))
     # --- budgets (per job defaults; overridable per request) ---

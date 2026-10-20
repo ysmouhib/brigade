@@ -5,7 +5,7 @@
 # Everything is pinned to ONE version triple so lean4 / mathlib4 / repl agree:
 set -euo pipefail
 
-PIN="${LEAN_PIN:-v4.15.0}"      # bump all three together; check the repl repo has this tag
+PIN="${LEAN_PIN:-v4.35.0}"      # bump all three together; repl and mathlib4 must both have this tag
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LEAN_DIR="$ROOT/lean"
 PROJ="$LEAN_DIR/BrigadeLean"

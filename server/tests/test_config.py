@@ -38,6 +38,22 @@ def test_unknown_mode_values_fail_loudly(monkeypatch, name, value):
         Config()
 
 
+def test_relative_lean_paths_resolve_against_the_repository_root(monkeypatch):
+    """.env lives at the repo root and says ./lean/...; the server runs from server/."""
+    monkeypatch.chdir(ROOT / "server")
+    monkeypatch.setenv("LEAN_PROJECT_DIR", "./lean/BrigadeLean")
+    monkeypatch.setenv("LEAN_REPL_BIN", "./lean/repl/.lake/build/bin/repl")
+    cfg = Config()
+    assert Path(cfg.lean_project_dir) == ROOT / "lean" / "BrigadeLean"
+    assert Path(cfg.lean_repl_bin) == ROOT / "lean" / "repl" / ".lake" / "build" / "bin" / "repl"
+
+
+def test_default_lean_project_is_the_one_setup_creates(monkeypatch):
+    monkeypatch.delenv("LEAN_PROJECT_DIR", raising=False)
+    monkeypatch.chdir(ROOT / "server")
+    assert Path(Config().lean_project_dir) == ROOT / "lean" / "BrigadeLean"
+
+
 def test_bad_integers_name_the_variable(monkeypatch):
     monkeypatch.setenv("MAX_ROUNDS", "two")
     with pytest.raises(ValueError, match="MAX_ROUNDS"):
