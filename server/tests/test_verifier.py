@@ -1,6 +1,6 @@
 """Unit tests for the verification layer itself (lint, parsing, fake semantics)."""
 from app.lean.verifier import (AXIOM_LINE, ERROR_LINE, FakeLean, lint_proof,
-                               split_theorem_blocks)
+                               parse_lean_output, split_theorem_blocks)
 
 
 def test_lint_catches_every_forbidden_token():
@@ -27,6 +27,18 @@ def test_lean_output_parsing_regexes():
     assert ERROR_LINE.findall(out) == ["unknown identifier 'Evenn'"]
     m = AXIOM_LINE.search("'thm' depends on axioms: [propext, Classical.choice, Quot.sound]")
     assert m and "Classical.choice" in m.group(1)
+
+
+def test_file_mode_keeps_info_messages_in_either_format():
+    """`trace` and `#print` output reach infos whether or not Lean prefixes 'info:'."""
+    out = ("/s/Check_x.lean:5:4: info: brigade-cascade: lemma_1 ring\n"
+           "/s/Check_x.lean:7:0: brigade-cascade: lemma_2 simp\n"
+           "/s/Check_x.lean:9:0: warning: declaration uses 'sorry'\n"
+           "/s/Check_x.lean:11:2: error: unsolved goals\n"
+           "n : ℕ\n")
+    res = parse_lean_output(1, out)
+    assert res.infos == ["brigade-cascade: lemma_1 ring", "brigade-cascade: lemma_2 simp"]
+    assert res.sorries == 1 and res.errors == ["unsolved goals"]
 
 
 async def test_fakelean_semantics():

@@ -160,3 +160,46 @@ async def test_replay_engine_refuses_custom_input():
             # and the served UI carries the honest labeling
             html = (await c.get("/")).text
             assert "ignores your text" in html and "Recorded scenario" in html
+
+
+async def test_health_names_the_configured_model_without_leaking_keys():
+    """The UI labels the engine from /health, so it must say which model really runs."""
+    cfg = demo_config()
+    cfg.fake_llm, cfg.lean_mode = False, "repl"
+    cfg.llm_provider = "openai"
+    cfg.openai_base_url, cfg.openai_api_key = "https://api.deepseek.com", "sk-secret-123"
+    cfg.chef_model = cfg.worker_model = "deepseek-flash"
+    app = create_app(cfg, llm=None, lean=default_fake_lean())
+    async with app.router.lifespan_context(app):
+        async with await _client(app) as c:
+            r = await c.get("/health")
+            h = r.json()
+            assert h["llm_provider"] == "openai" and h["llm_label"] == "deepseek-flash"
+            assert h["llm_endpoint"] == "api.deepseek.com"
+            assert (h["chef_model"], h["worker_model"]) == ("deepseek-flash", "deepseek-flash")
+            assert "sk-secret-123" not in r.text
+
+    cfg.chef_model = "deepseek-pro"                 # different chef: both names shown
+    app = create_app(cfg, llm=None, lean=default_fake_lean())
+    async with app.router.lifespan_context(app):
+        async with await _client(app) as c:
+            assert (await c.get("/health")).json()["llm_label"] == "deepseek-pro / deepseek-flash"
+
+    cfg.llm_provider = "anthropic"
+    app = create_app(cfg, llm=None, lean=default_fake_lean())
+    async with app.router.lifespan_context(app):
+        async with await _client(app) as c:
+            h = (await c.get("/health")).json()
+            assert h["llm_label"] == "Claude" and h["llm_endpoint"] == ""
+
+
+async def test_ui_explains_where_an_openai_compatible_key_lives():
+    cfg = demo_config()
+    app = create_app(cfg, demo_llm(), default_fake_lean())
+    async with app.router.lifespan_context(app):
+        async with await _client(app) as c:
+            html = (await c.get("/")).text
+    # the engine label and the Settings dialog are filled from /health, not hard-coded
+    assert 'id="engine_real"' in html and "llm_label" in html
+    assert 'id="s_compat"' in html and "OPENAI_API_KEY" in html
+    assert "Only the Claude + Lean engine" not in html

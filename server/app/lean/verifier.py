@@ -126,6 +126,9 @@ class FakeLean:
 
 ERROR_LINE = re.compile(r"^[^\n:]*:\d+:\d+:\s*error:\s*(.*)$", re.MULTILINE)
 WARN_LINE = re.compile(r"^[^\n:]*:\d+:\d+:\s*warning:\s*(.*)$", re.MULTILINE)
+# Any other positioned message is informational (`trace`, `#print`); depending on the
+# Lean version it is printed with or without an "info:" prefix.
+POS_LINE = re.compile(r"^[^\n:]*:\d+:\d+:\s*(.*)$", re.MULTILINE)
 AXIOM_LINE = re.compile(r"depends on axioms:\s*\[([^\]]*)\]")
 
 
@@ -136,10 +139,12 @@ def parse_lean_output(rc: int, out: str) -> VerifyResult:
     # Any warning mentioning sorry counts (the wording has varied across Lean versions);
     # erring this way can only reject a proof, never accept one.
     sorries = sum(1 for w in warnings if "sorry" in w)
+    infos = [re.sub(r"^info:\s*", "", m) for m in POS_LINE.findall(out)
+             if not m.startswith(("error:", "warning:"))]
     if rc != 0 and not errors:
         errors = [out.strip()[:500] or f"lean exited with code {rc}"]
     return VerifyResult(ok=(rc == 0 and not errors), errors=errors, sorries=sorries,
-                        warnings=warnings)
+                        warnings=warnings, infos=infos)
 
 
 def parse_axiom_report(rc: int, out: str, name: str) -> AuditResult:

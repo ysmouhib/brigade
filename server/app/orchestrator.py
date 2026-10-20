@@ -41,9 +41,18 @@ NAME_RE = re.compile(r"[^A-Za-z0-9_']")
 
 # Zero-LLM first pass: one Lean call trying the powerful closers. If any branch closes
 # the pinned goal the lemma is VERIFIED for the cost of a single check and no tokens.
-CASCADE_BODY = ("first\n"
-                "  | omega\n  | ring\n  | norm_num\n  | positivity\n"
-                "  | nlinarith\n  | simp\n  | aesop\n  | decide")
+CASCADE_TACTICS = ("omega", "ring", "norm_num", "positivity", "nlinarith", "simp", "aesop",
+                   "decide")
+CASCADE_MARK = "brigade-cascade:"
+
+
+def cascade_body(lean_name: str) -> str:
+    """The cascade for one lemma. Each branch must CLOSE the goal (`done`): `ring`,
+    `norm_num` and `simp` can succeed while leaving a rewritten goal, and `first` would
+    then stop at that branch. The winning branch prints a `trace` line naming the lemma
+    and tactic, so the proof can be cut down to that one tactic."""
+    return "first\n" + "\n".join(
+        f'  | ({t}; done; trace "{CASCADE_MARK} {lean_name} {t}")' for t in CASCADE_TACTICS)
 
 
 class BudgetExceeded(Exception):
@@ -146,14 +155,35 @@ class Orchestrator:
         """One symbolic-automation Lean call before spending any prover tokens."""
         if not self.cfg.tactic_cascade or node.status != NodeStatus.STATEMENT_OK:
             return False
-        res = await self._check(self._theorem_text(node, CASCADE_BODY), node,
-                                context=self._context_code(node.id))
-        if res.ok and res.sorries == 0:
-            node.lean_proof, node.status, node.last_errors = CASCADE_BODY, NodeStatus.VERIFIED, []
-            self.emit("chef", "chef", "verified",
-                      f"{node.lean_name} VERIFIED by the tactic cascade (0 LLM calls).", node.id)
-            return True
-        return False
+        context = self._context_code(node.id)
+        body = cascade_body(node.lean_name)
+        res = await self._check(self._theorem_text(node, body), node, context=context)
+        if not (res.ok and res.sorries == 0):
+            return False
+        winner = self._cascade_winner(node, res)
+        if winner and self.job.lean_calls < self.cfg.max_lean_calls:
+            # Keep only the tactic that won, but only once Lean has accepted it on its
+            # own (I1: a recorded proof is always text Lean checked).
+            single = await self._check(self._theorem_text(node, winner), node, context=context)
+            if single.ok and single.sorries == 0:
+                body = winner
+        node.lean_proof, node.status, node.last_errors = body, NodeStatus.VERIFIED, []
+        how = f"`{body}`" if body in CASCADE_TACTICS else "full cascade kept"
+        self.emit("chef", "chef", "verified",
+                  f"{node.lean_name} VERIFIED by the tactic cascade ({how}, 0 LLM calls).",
+                  node.id)
+        return True
+
+    @staticmethod
+    def _cascade_winner(node: ProofNode, res) -> str | None:
+        """The tactic named by this lemma's cascade trace, if Lean reported one."""
+        prefix = f"{CASCADE_MARK} {node.lean_name} "
+        for info in getattr(res, "infos", []) or []:
+            for line in info.splitlines():
+                line = line.strip()
+                if line.startswith(prefix) and line[len(prefix):] in CASCADE_TACTICS:
+                    return line[len(prefix):]
+        return None
 
     def _clean_body(self, node: ProofNode, raw: str) -> str:
         """Strip a repeated header if the prover echoed the theorem line (I3)."""

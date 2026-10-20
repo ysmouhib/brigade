@@ -17,6 +17,7 @@ import os
 from dataclasses import replace
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
@@ -109,7 +110,7 @@ def create_app(cfg: Optional[Config] = None,
         if isinstance(app.state.lean, FakeLean):
             # The simulator accepts any proof of a theorem it has no rule for, so it must
             # never judge a real model's output.
-            raise HTTPException(409, "Real Claude jobs need a real Lean verifier, but the server "
+            raise HTTPException(409, "Real jobs need a real Lean verifier, but the server "
                                      "runs with LEAN_MODE=fake. Run the Lean setup, set "
                                      "LEAN_MODE=file or repl, and restart; or tick 'offline demo'.")
         key = cfg.openai_api_key if compat else cfg.anthropic_api_key
@@ -131,12 +132,26 @@ def create_app(cfg: Optional[Config] = None,
     async def index():
         return FileResponse(STATIC_DIR / "index.html")
 
+    def _llm_label() -> str:
+        """What the UI calls the real engine: 'Claude', or the configured model name(s)."""
+        if cfg.llm_provider != "openai":
+            return "Claude"
+        if cfg.chef_model and cfg.chef_model != cfg.worker_model:
+            return f"{cfg.chef_model} / {cfg.worker_model}"
+        return cfg.worker_model or "OpenAI-compatible model"
+
     @app.get("/health")
     async def health():
         return {"ok": True,
                 "lean_mode": cfg.lean_mode,
                 "lean_ready": bool(getattr(app.state.lean, "ready", True)),
                 "llm_mode": "fake" if cfg.fake_llm else cfg.llm_provider,
+                "llm_provider": cfg.llm_provider,
+                "llm_label": _llm_label(),
+                "llm_endpoint": (urlsplit(cfg.openai_base_url).hostname or ""
+                                 if cfg.llm_provider == "openai" else ""),
+                "chef_model": cfg.chef_model,
+                "worker_model": cfg.worker_model,
                 "has_key": bool(cfg.anthropic_api_key) or cfg.fake_llm
                            or (cfg.llm_provider == "openai" and bool(cfg.openai_api_key))
                            or app.state.injected_llm is not None,

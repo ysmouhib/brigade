@@ -12,7 +12,7 @@ from app import retrieval
 from app.lean.verifier import FakeLean, ReplLeanVerifier, VerifyResult
 from app.llm import RoutedLLM, ScriptedLLM
 from app.models import Job, JobStatus, NodeStatus
-from app.orchestrator import CASCADE_BODY, Orchestrator
+from app.orchestrator import CASCADE_MARK, CASCADE_TACTICS, Orchestrator, cascade_body
 from app.store import Store
 from app.testing import demo_config
 
@@ -48,24 +48,77 @@ def _handler(lemma_bodies, forbid=()):
 
 
 # --------------------------------------------------------------------- tactic cascade
-async def test_cascade_proves_lemma_with_zero_prover_calls():
-    """A lemma the automation closes must never reach an LLM prover (forbid asserts it)."""
-    lean = FakeLean(rules={"lemma_1": (["omega"], "error: unsolved goals"),
-                           "thm_main": (["lemma_1"], "error: unsolved goals")})
+class _CascadeLean(FakeLean):
+    """FakeLean plus what real Lean prints when a cascade branch wins: the branch's
+    `trace` line as an info message. `winner` lets a test claim any branch won."""
+
+    def __init__(self, rules, winner: str, reported_for: str = "lemma_1"):
+        super().__init__(rules=rules)
+        self.winner, self.reported_for = winner, reported_for
+
+    async def check(self, code, context=""):
+        res = await super().check(code, context)
+        if res.ok and CASCADE_MARK in code:
+            res.infos = [f"{CASCADE_MARK} {self.reported_for} {self.winner}"]
+        return res
+
+
+def _cascade_job(lean):
     cfg = demo_config(max_rounds=1, verify_policy="full", tactic_cascade=True)
     job = Job(problem="Prove the main claim.")
     orch = Orchestrator(job, ScriptedLLM(_handler({"thm_main": "exact lemma_1"},
                                                   forbid={"lemma_1"})), lean, cfg)
+    return job, orch
+
+
+def test_every_cascade_branch_must_close_the_goal():
+    """`ring`, `norm_num` and `simp` can succeed while leaving a rewritten goal; inside
+    `first` that would stop the cascade at a branch that did not prove anything."""
+    branches = [ln for ln in cascade_body("x").splitlines() if ln.strip().startswith("|")]
+    assert len(branches) == len(CASCADE_TACTICS)
+    for tac, ln in zip(CASCADE_TACTICS, branches):
+        assert ln.strip().startswith(f"| ({tac}; done;"), ln
+
+
+async def test_cascade_proves_lemma_with_zero_prover_calls_and_keeps_the_winning_tactic():
+    """A lemma the automation closes never reaches an LLM prover (forbid asserts it), and
+    its recorded proof is the one tactic that worked, not the whole cascade."""
+    lean = _CascadeLean({"lemma_1": (["ring"], "error: unsolved goals"),
+                         "thm_main": (["lemma_1"], "error: unsolved goals")}, winner="ring")
+    job, orch = _cascade_job(lean)
     await orch.run()
     assert job.status == JobStatus.PROVED
     lemma = next(n for n in job.nodes.values() if n.lean_name == "lemma_1")
-    assert lemma.status == NodeStatus.VERIFIED and lemma.lean_proof == CASCADE_BODY
-    assert any(e.type == "verified" and "cascade" in e.content for e in job.events)
-    # I1 stays intact: the cascade proof text (as indented into the theorem) was
-    # seen and OK'd by the verifier
-    import textwrap
-    indented = textwrap.indent(CASCADE_BODY, "  ")
-    assert any(indented in code and "lemma_1" in code for code in lean.calls)
+    assert lemma.status == NodeStatus.VERIFIED and lemma.lean_proof == "ring"
+    assert any(e.type == "verified" and "cascade" in e.content and "`ring`" in e.content
+               for e in job.events)
+    assert "first" not in job.final_lean and CASCADE_MARK not in job.final_lean
+    # I1: the exact single-tactic theorem was checked on its own before being recorded
+    assert any(code.rstrip().endswith(":= by\n  ring") and "lemma_1" in code
+               for code in lean.calls)
+
+
+async def test_cascade_keeps_the_checked_body_when_the_single_tactic_fails():
+    """If the named branch does not verify on its own, the cascade text Lean accepted
+    stays (I1: never record a proof Lean has not seen)."""
+    lean = _CascadeLean({"lemma_1": (["ring"], "error: unsolved goals"),
+                         "thm_main": (["lemma_1"], "error: unsolved goals")}, winner="omega")
+    job, orch = _cascade_job(lean)
+    await orch.run()
+    assert job.status == JobStatus.PROVED
+    lemma = next(n for n in job.nodes.values() if n.lean_name == "lemma_1")
+    assert lemma.lean_proof == cascade_body("lemma_1")
+
+
+async def test_cascade_ignores_a_win_reported_for_another_lemma():
+    """Context lemmas can carry their own cascade trace; only this lemma's line counts."""
+    lean = _CascadeLean({"lemma_1": (["ring"], "error: unsolved goals"),
+                         "thm_main": (["lemma_1"], "error: unsolved goals")},
+                        winner="ring", reported_for="other_lemma")
+    job, orch = _cascade_job(lean)
+    await orch.run()
+    lemma = next(n for n in job.nodes.values() if n.lean_name == "lemma_1")
+    assert lemma.lean_proof == cascade_body("lemma_1")
 
 
 async def test_cascade_failure_falls_through_to_provers():
