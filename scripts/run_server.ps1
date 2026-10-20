@@ -7,4 +7,4 @@ $ErrorActionPreference = "Stop"
 Set-Location "$PSScriptRoot\..\server"
 if (Test-Path "..\.env") { Import-DotEnv "..\.env" }
 if ($Demo) { $env:FAKE_LLM = "1"; $env:LEAN_MODE = "fake" }
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8811
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8811 --no-access-log

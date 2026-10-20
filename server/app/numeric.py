@@ -83,6 +83,8 @@ def find_counterexample(template: str, candidates: list[dict[str, int]]) -> dict
 
 def _worker_main(conn) -> None:
     """Runs in the probe process: answer (template, candidates) requests until closed."""
+    import signal
+    signal.signal(signal.SIGINT, signal.SIG_IGN)   # Ctrl+C stops the server, which closes us
     while True:
         try:
             template, candidates = conn.recv()

@@ -17,9 +17,12 @@ import os
 import re
 import shutil
 import tempfile
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Callable, Protocol
+
+from ..progress import log
 
 STANDARD_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 # Tokens a proof body may never contain. `native_decide` is excluded because it extends
@@ -192,9 +195,13 @@ class FileLeanVerifier:
     async def check(self, code: str, context: str = "") -> VerifyResult:
         if context:
             code = f"{context}\n\n{code}"
+        t0 = time.monotonic()
+        log.info("-> Lean (file): checking")
         async with self._lock:
             rc, out = await self._run(code)
-        return parse_lean_output(rc, out)
+        res = parse_lean_output(rc, out)
+        log.info("<- Lean (file): %s in %.0fs", res.summary()[:80], time.monotonic() - t0)
+        return res
 
     async def axiom_audit(self, code: str, name: str) -> AuditResult:
         async with self._lock:
@@ -227,6 +234,8 @@ class ReplLeanVerifier:
     async def _ensure_started(self) -> None:
         if self._proc and self._proc.returncode is None and self._base_env is not None:
             return
+        t0 = time.monotonic()
+        log.info("-> Lean REPL: starting and importing Mathlib (first time: about 1-3 min)")
         self._proc = await asyncio.create_subprocess_exec(
             "lake", "env", self.repl_bin,
             cwd=self.project_dir,
@@ -238,6 +247,7 @@ class ReplLeanVerifier:
         self._base_env = resp.get("env")
         if self._base_env is None:
             raise RuntimeError(f"REPL failed to import Mathlib: {resp}")
+        log.info("<- Lean REPL: ready in %.0fs", time.monotonic() - t0)
 
     async def _roundtrip(self, obj: dict, timeout: float) -> dict:
         assert self._proc and self._proc.stdin and self._proc.stdout
@@ -282,6 +292,11 @@ class ReplLeanVerifier:
         return env
 
     async def check(self, code: str, context: str = "") -> VerifyResult:
+        res = await self._check(code, context)
+        log.info("<- Lean REPL: %s", res.summary()[:100])
+        return res
+
+    async def _check(self, code: str, context: str = "") -> VerifyResult:
         async with self._lock:
             try:
                 await self._ensure_started()

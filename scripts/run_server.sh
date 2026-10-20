@@ -3,4 +3,4 @@
 set -euo pipefail
 cd "$(dirname "$0")/../server"
 if [ -f ../.env ]; then set -a; . ../.env; set +a; fi
-exec python -m uvicorn app.main:app --host "${HOST:-0.0.0.0}" --port "${PORT:-8811}"
+exec python -m uvicorn app.main:app --host "${HOST:-0.0.0.0}" --port "${PORT:-8811}" --no-access-log

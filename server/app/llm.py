@@ -7,7 +7,10 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
 from typing import Protocol
+
+from .progress import log
 
 
 class LLM(Protocol):
@@ -107,6 +110,8 @@ class AnthropicLLM:
         last: Exception | None = None
         async with self._sem:
             for attempt in range(self.max_attempts):
+                t0 = time.monotonic()
+                log.info("-> %s: calling %s", role, self._model_for(role, model))
                 try:
                     msg = await self._client.messages.create(
                         model=self._model_for(role, model),
@@ -114,7 +119,9 @@ class AnthropicLLM:
                         system=system,
                         messages=[{"role": "user", "content": user}],
                     )
-                    return "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
+                    text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
+                    log.info("<- %s: answered in %.0fs", role, time.monotonic() - t0)
+                    return text
                 except anthropic.APIStatusError as e:
                     if e.status_code not in _RETRYABLE_STATUS:
                         detail = getattr(e, "message", "") or str(e)
@@ -124,6 +131,7 @@ class AnthropicLLM:
                 except anthropic.APIConnectionError as e:
                     last = e
                 if attempt + 1 < self.max_attempts:
+                    log.info("   %s: %s; retrying in %.0fs", role, last, 2.0 * (attempt + 1))
                     await asyncio.sleep(2.0 * (attempt + 1))
         raise LLMUnavailableError(f"Anthropic API unavailable after {self.max_attempts} attempts: {last}")
 
@@ -140,7 +148,8 @@ class OpenAICompatLLM:
 
     def __init__(self, base_url: str, model: str, api_key: str = "", *,
                  chef_model: str | None = None, max_attempts: int = 4,
-                 max_tokens_floor: int = 8192, max_concurrency: int = 2, transport=None):
+                 max_tokens_floor: int = 8192, max_concurrency: int = 2, timeout_s: float = 600.0,
+                 transport=None):
         import httpx
         self.base_url = base_url.rstrip("/")
         self.model = model
@@ -149,7 +158,7 @@ class OpenAICompatLLM:
         self.max_tokens_floor = max_tokens_floor
         self._sem = asyncio.Semaphore(max_concurrency)
         self._client = httpx.AsyncClient(
-            timeout=httpx.Timeout(180.0), transport=transport,
+            timeout=httpx.Timeout(timeout_s), transport=transport,   # thinking models can take minutes
             headers={"Authorization": f"Bearer {api_key}"} if api_key else {})
 
     def _model_for(self, role: str, override: str | None) -> str:
@@ -177,6 +186,8 @@ class OpenAICompatLLM:
         async with self._sem:
             for attempt in range(self.max_attempts):
                 wait = min(60.0, 5.0 * 2 ** attempt)
+                t0 = time.monotonic()
+                log.info("-> %s: calling %s", role, body["model"])
                 try:
                     r = await self._client.post(f"{self.base_url}/chat/completions", json=body)
                 except httpx.HTTPError as e:
@@ -184,6 +195,7 @@ class OpenAICompatLLM:
                 else:
                     if r.status_code == 200:
                         data = r.json()
+                        log.info("<- %s: answered in %.0fs", role, time.monotonic() - t0)
                         try:
                             return data["choices"][0]["message"]["content"] or ""
                         except (KeyError, IndexError, TypeError) as e:
@@ -195,6 +207,8 @@ class OpenAICompatLLM:
                     last = f"HTTP {r.status_code}: {r.text[:200]}"
                     wait = self._wait_for(r, attempt)
                 if attempt + 1 < self.max_attempts:
+                    log.info("   %s: %s after %.0fs; retrying in %.0fs", role, last[:120],
+                             time.monotonic() - t0, wait)
                     await asyncio.sleep(wait)
         raise LLMUnavailableError(f"{self.base_url} unavailable after {self.max_attempts} "
                                   f"attempts: {last}")
