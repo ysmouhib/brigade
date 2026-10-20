@@ -64,6 +64,7 @@ class Orchestrator:
         self.job, self.llm, self.lean, self.cfg = job, llm, lean, cfg
         self._seq = 0
         self._names: set[str] = set()
+        self._cascade_tried: set[tuple[str, str]] = set()
         self._unavailable_in_a_row = 0
         self._said_lean_waiting = False
 
@@ -152,9 +153,14 @@ class Orchestrator:
         return hits
 
     async def _try_cascade(self, node: ProofNode) -> bool:
-        """One symbolic-automation Lean call before spending any prover tokens."""
+        """One symbolic-automation Lean call before spending any prover tokens. Once per
+        statement: the cascade ignores context lemmas, so a retry repeats the result."""
         if not self.cfg.tactic_cascade or node.status != NodeStatus.STATEMENT_OK:
             return False
+        key = (node.id, node.lean_statement)
+        if key in self._cascade_tried:
+            return False
+        self._cascade_tried.add(key)
         context = self._context_code(node.id)
         body = cascade_body(node.lean_name)
         res = await self._check(self._theorem_text(node, body), node, context=context)
@@ -531,19 +537,21 @@ class Orchestrator:
                 self.emit("chef", "chef", "lint_reject", f"{kid.lean_name}: {lint}", kid.id)
                 continue
             cands.append((kid, body))
-        if len(cands) < 2:
-            return True
-        combined = "\n\n".join(self._theorem_text(k, b) for k, b in cands)
-        res = await self._check(combined, context=self._context_code())
-        if res.ok and res.sorries == 0:
-            for kid, body in cands:
-                kid.lean_proof, kid.status, kid.last_errors = body, NodeStatus.VERIFIED, []
-                self.emit("chef", "chef", "verified",
-                          f"{kid.lean_name} VERIFIED by Lean (batched check, 1 attempt).", kid.id)
-            return True
-        self.emit("chef", "chef", "batch_split",
-                  f"batched check failed ({res.errors[:2]}); re-checking "
-                  f"{len(cands)} candidates individually")
+        if len(cands) >= 2:
+            combined = "\n\n".join(self._theorem_text(k, b) for k, b in cands)
+            res = await self._check(combined, context=self._context_code())
+            if res.ok and res.sorries == 0:
+                for kid, body in cands:
+                    kid.lean_proof, kid.status, kid.last_errors = body, NodeStatus.VERIFIED, []
+                    self.emit("chef", "chef", "verified",
+                              f"{kid.lean_name} VERIFIED by Lean (batched check, 1 attempt).",
+                              kid.id)
+                return True
+            self.emit("chef", "chef", "batch_split",
+                      f"batched check failed ({res.errors[:2]}); re-checking "
+                      f"{len(cands)} candidates individually")
+        # A lone candidate (its siblings fell to the cascade) is checked on its own; it
+        # used to be dropped unchecked and the prover asked again.
         for kid, body in cands:
             res_i = await self._check(self._theorem_text(kid, body), kid,
                                       context=self._context_code(kid.id))

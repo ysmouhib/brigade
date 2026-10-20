@@ -17,8 +17,8 @@ from app.store import Store
 from app.testing import demo_config
 
 
-def _handler(lemma_bodies, forbid=()):
-    """Minimal scripted brigade: one planned lemma + root."""
+def _handler(lemma_bodies, forbid=(), n_lemmas=1, prover_calls=None):
+    """Minimal scripted brigade: `n_lemmas` planned lemmas + root."""
     def handler(role, user, n):
         if role == "skeptic":
             return json.dumps({"is_checkable": False, "claim_expr": "", "candidates": []})
@@ -27,7 +27,8 @@ def _handler(lemma_bodies, forbid=()):
                                "candidate_lemmas": [], "risks": "", "confidence": 0.5})
         if role == "strategist":
             return json.dumps({"chosen_strategy": "s", "main_theorem_informal": "main claim",
-                               "lemmas": [{"informal": "helper fact", "sketch": ""}],
+                               "lemmas": [{"informal": f"helper fact {i}", "sketch": ""}
+                                          for i in range(n_lemmas)],
                                "assembly_note": "combine"})
         if role == "formalizer":
             name = user.split("TARGET lean_name: ")[1].split("\n")[0]
@@ -36,6 +37,8 @@ def _handler(lemma_bodies, forbid=()):
         if role == "prover":
             name = user.split("TARGET lean_name: ")[1].split("\n")[0]
             assert name not in forbid, f"prover must not be consulted for {name}"
+            if prover_calls is not None:
+                prover_calls[name] = prover_calls.get(name, 0) + 1
             bodies = lemma_bodies[name]
             body = bodies[min(n, len(bodies) - 1)] if isinstance(bodies, list) else bodies
             return json.dumps({"proof": body, "claims_false": False, "why": ""})
@@ -131,6 +134,42 @@ async def test_cascade_failure_falls_through_to_provers():
     assert job.status == JobStatus.PROVED
     lemma = next(n for n in job.nodes.values() if n.lean_name == "lemma_1")
     assert lemma.lean_proof == "alpha"   # the LLM proof, not the cascade
+
+
+async def test_strategic_batch_checks_a_lone_remaining_candidate():
+    """Real failure from the second benchmark: the cascade closed lemma_1, which left one
+    prover candidate in the strategic batch, and a batch of one was never checked. The
+    (correct) first proof was dropped and the prover asked again."""
+    lean = FakeLean(rules={"lemma_1": (["omega"], "error: unsolved goals"),
+                           "lemma_2": (["alpha"], "error: unsolved goals"),
+                           "thm_main": (["lemma_1", "lemma_2"], "error: unsolved goals")})
+    calls: dict[str, int] = {}
+    llm = ScriptedLLM(_handler({"lemma_2": "alpha", "thm_main": "exact ⟨lemma_1, lemma_2⟩"},
+                               forbid={"lemma_1"}, n_lemmas=2, prover_calls=calls))
+    cfg = demo_config(max_rounds=1, verify_policy="strategic", tactic_cascade=True,
+                      quick_attempt=False)
+    job = Job(problem="Prove the main claim.")
+    await Orchestrator(job, llm, lean, cfg).run()
+    lemma_2 = next(n for n in job.nodes.values() if n.lean_name == "lemma_2")
+    assert lemma_2.status == NodeStatus.VERIFIED and lemma_2.attempts == 1
+    assert calls["lemma_2"] == 1
+
+
+async def test_cascade_runs_once_per_lemma():
+    """The cascade does not use context lemmas, so a second try on the same statement can
+    only repeat the first result. After a failed batched attempt it used to run again
+    before the prover loop."""
+    lean = FakeLean(rules={"lemma_1": (["omega"], "error: unsolved goals"),
+                           "lemma_2": (["alpha"], "error: unsolved goals"),
+                           "thm_main": (["lemma_1", "lemma_2"], "error: unsolved goals")})
+    cfg = demo_config(max_rounds=1, verify_policy="strategic", tactic_cascade=True,
+                      quick_attempt=False)
+    job = Job(problem="Prove the main claim.")
+    llm = ScriptedLLM(_handler({"lemma_2": ["beta", "alpha"], "thm_main": "exact ⟨lemma_1, lemma_2⟩"},
+                               forbid={"lemma_1"}, n_lemmas=2))
+    await Orchestrator(job, llm, lean, cfg).run()
+    assert job.status == JobStatus.PROVED
+    assert sum(1 for c in lean.calls if f"{CASCADE_MARK} lemma_2 " in c) == 1
 
 
 # ------------------------------------------------------------------ quick attempt
