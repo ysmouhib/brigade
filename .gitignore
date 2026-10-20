@@ -20,3 +20,6 @@ lean/repl/
 .DS_Store
 Thumbs.db
 nohup.out
+
+# benchmark outputs (summarized in experiments/LOG.md)
+experiments/results/
