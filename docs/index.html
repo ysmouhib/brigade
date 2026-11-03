@@ -249,10 +249,11 @@ a{color:var(--steel)}
 </section>
 
 <section id="replay">
-  <h2><span class="n">04</span>Recording of a genuine run (the real pipeline)</h2>
-  <p class="lead">This is the recorded event stream of an actual job through the real
-  orchestrator in its deterministic test harness — the same acceptance path as production.
-  Watch the statement gate catch a broken formalization, a failed proof get repaired, a
+  <h2><span class="n">04</span>Replay of the scripted demo (real orchestrator, simulated Lean)</h2>
+  <p class="lead">This is the recorded event stream of the deterministic test scenario: the real
+  orchestrator code, driven by scripted agent answers and checked by <code>FakeLean</code>,
+  a rule-based stand-in for Lean used in the test suite. It shows the control flow, not a
+  machine-checked proof. Watch the statement gate catch a broken formalization, a failed proof get repaired, a
   stuck lemma get decomposed, and the axiom audit gate the final verdict.</p>
   <div class="panel">
     <div class="bar">
@@ -267,11 +268,11 @@ a{color:var(--steel)}
     <div class="rail" id="rail" style="max-height:420px"></div>
     <div class="cols" id="result" style="display:none">
       <div>
-        <p class="note" style="margin-top:0"><b>Proof tree</b> — every node verified by Lean</p>
+        <p class="note" style="margin-top:0"><b>Proof tree</b> — every node accepted (simulated verifier)</p>
         <div id="tree"></div>
       </div>
       <div>
-        <p class="note" style="margin-top:0"><b>Final Lean file</b> — compiled whole, axiom-audited</p>
+        <p class="note" style="margin-top:0"><b>Final Lean file</b> — whole-file check and axiom audit (simulated)</p>
         <pre class="lean" id="leanfile"></pre>
       </div>
     </div>
@@ -360,7 +361,7 @@ if (typeof module!=='undefined') module.exports={extractJSON,evalArith,parseComp
 </script>
 
 <script>
-// ---------------- recorded replay of the genuine run ----------------
+// ---------------- recorded replay of the scripted demo ----------------
 const D=JSON.parse(document.getElementById('data').textContent);
 const rail=document.getElementById('rail'),stamp=document.getElementById('stamp');
 let rTimer=null,ri=0;

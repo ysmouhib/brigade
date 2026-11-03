@@ -13,7 +13,7 @@ nodes:
       lemma_2_a    [verified] attempts=1
       lemma_2_b    [verified] attempts=1
 
---- final_lean (Lean-verified) ---
+--- final_lean (accepted by the configured verifier; FakeLean when LEAN_MODE=fake) ---
 theorem lemma_1 (n : ℕ) : Even (n * (n + 1)) := by
   exact Nat.even_mul_succ_self n
 

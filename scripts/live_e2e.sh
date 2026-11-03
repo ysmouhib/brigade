@@ -40,7 +40,7 @@ print('nodes:')
 for n in sorted(j['nodes'], key=lambda x: (x['depth'], x['lean_name'])):
     print(f\"  {'  '*n['depth']}{n['lean_name']:12s} [{n['status']}] attempts={n['attempts']}\")
 print()
-print('--- final_lean (Lean-verified) ---')
+print('--- final_lean (accepted by the configured verifier; FakeLean when LEAN_MODE=fake) ---')
 print(j['final_lean'])
 open('/tmp/brigade_job.json','w').write(json.dumps(j, indent=2))
 "

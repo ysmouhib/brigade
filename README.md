@@ -3,12 +3,14 @@
 [![tests](https://github.com/ysmouhib/brigade/actions/workflows/ci.yml/badge.svg)](https://github.com/ysmouhib/brigade/actions)
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Lean 4](https://img.shields.io/badge/Lean-4.15.0%20%2B%20Mathlib-9d76e0.svg)](scripts/setup_lean.sh)
-![A genuine run, end to end: every node of the proof tree verified by Lean, axiom audit clean, final file compiled whole](docs/genuine-run.png)
+![The scripted demo scenario from the test suite: real orchestrator, scripted agent answers, simulated Lean verifier (FakeLean)](docs/scripted-demo-run.png)
+
+*Screenshot: the deterministic test scenario, checked by the simulated verifier. No real-Lean benchmark results are published yet.*
 
 > **Origin:** Brigade began as a private project in 2024. This repository was
 > published in July 2026; the public history starts from the published state.
 
-**Website — in-browser simulated demo (one free model via WebLLM, no key, no server) + a recording of a genuine run:** https://ysmouhib.github.io/brigade/  
+**Website — in-browser simulated demo (one free model via WebLLM, no key, no server) + a replay of the scripted test scenario:** https://ysmouhib.github.io/brigade/  
 *The site is a simulation for illustration; only this repo with your key and a local Lean install produces machine-checked results.*  
 
 
@@ -98,7 +100,7 @@ server/tests/      39 tests: unit, invariant, end-to-end, API-level, strategic p
 scripts/           setup_lean.sh, run_server.sh, live_e2e.sh, bench.py (+ PowerShell variants)
 lean/              populated by setup_lean.sh (pinned Mathlib project + optional REPL)
 Dockerfile         optional full image (server + Lean); large, see warning inside
-docs/              the GitHub Pages site: WebLLM simulated demo + recording of a genuine run
+docs/              the GitHub Pages site: WebLLM simulated demo + replay of the scripted test scenario
 scripts/make_site.py  regenerates docs/index.html (re-captures the recording from the harness)
 ```
 
