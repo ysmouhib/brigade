@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import sys
 
-from . import bench, skeptic_hj
+from . import bench, blueprint, density_hj, skeptic_hj
 from .lean_verifier import RealLeanVerifier, lint_proof
 from .library_index import PremiseIndex
 from .llm import MultiProviderLLM, ProviderConfig
@@ -156,6 +156,59 @@ async def _cmd_bench(args: argparse.Namespace) -> int:
     return 0 if all_ok else 1
 
 
+async def _cmd_certify_dhj(args: argparse.Namespace) -> int:
+    proj = Path(args.project_dir).resolve()
+    res = density_hj.solve_dhj(args.d, args.k, restarts=args.restarts, steps=args.steps)
+    print(
+        f"DHJ(d={args.d}, k={args.k}): max_found={res.size}/{res.num_words} "
+        f"(optimal={res.optimal}, time={res.elapsed_s:.3f}s)"
+    )
+    thm = args.theorem or f"dhj_{args.d}_{args.k}_ge_{res.size}"
+    lean_src = density_hj.emit_dhj_lower_lean(res, theorem_name=thm)
+    if args.out:
+        out_path = Path(args.out)
+        out_path.write_text(
+            "import HJBrigade\n\nnamespace HJBrigade\n\n" + lean_src + "\nend HJBrigade\n",
+            encoding="utf-8",
+        )
+        print(f"Wrote density witness to {out_path}")
+    if args.verify:
+        verifier = RealLeanVerifier(proj, timeout_s=args.lean_timeout)
+        chk = await verifier.check(lean_src)
+        aud = await verifier.axiom_audit(lean_src, thm)
+        print(f"Lean verification: {chk.summary()}")
+        print(f"Axiom audit ({thm}): ok={aud.ok} axioms={aud.axioms} {aud.note}")
+        return 0 if (chk.ok and chk.sorries == 0 and aud.ok) else 1
+    return 0
+
+
+async def _cmd_blueprint(args: argparse.Namespace) -> int:
+    proj = Path(args.project_dir).resolve()
+    report = await blueprint.inspect_blueprint(proj, Path(args.file).resolve())
+    if args.json:
+        print(json.dumps(report, indent=2))
+        return 0 if report["compile_ok"] else 1
+    print(
+        f"Blueprint {report['file']}: compile_ok={report['compile_ok']} "
+        f"({report['completed_count']} completed, {report['open_count']} open sorry)"
+    )
+    for err in report["errors"]:
+        print(f"  ERROR: {err}")
+    for item in report["items"]:
+        if item["has_sorry"]:
+            print(f"\n[OPEN] {item['name']} (L{item['lines'][0]}-{item['lines'][1]})")
+            for g in item["goals"]:
+                print(f"  Goal:\n    " + g.replace("\n", "\n    "))
+            if item["premise_hints"]:
+                print("  Top HJBrigade premises:")
+                for h in item["premise_hints"]:
+                    print(f"    - {h}")
+        else:
+            status = "PASS" if item["axiom_ok"] else ("DEFERRED" if item["axiom_ok"] is None else "FAIL")
+            print(f"[{status}] {item['name']}  axioms={item['axioms']} {item['note']}")
+    return 0 if report["compile_ok"] else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="hj-brigade", description="Neuro-symbolic Lean 4 Ramsey / Hales-Jewett prover")
     p.add_argument("--project-dir", default=str(_default_project_dir()), help="Path to HJBrigade Lake project")
@@ -194,6 +247,20 @@ def build_parser() -> argparse.ArgumentParser:
     pb.add_argument("--suite", default="")
     pb.add_argument("--live", action="store_true", help="Enable live LLM calls from env keys")
     pb.add_argument("--json", action="store_true")
+
+    pd = sub.add_parser("certify-dhj", help="Find and Lean-verify line-free density lower bounds in [k]^d")
+    pd.add_argument("--d", type=int, required=True)
+    pd.add_argument("--k", type=int, required=True)
+    pd.add_argument("--theorem", default="")
+    pd.add_argument("--out", default="")
+    pd.add_argument("--verify", action="store_true")
+    pd.add_argument("--restarts", type=int, default=30)
+    pd.add_argument("--steps", type=int, default=1200)
+    pd.add_argument("--lean-timeout", type=float, default=60.0)
+
+    pbl = sub.add_parser("blueprint", help="Extract sorry goals, premise hints, and axiom status for a Lean file")
+    pbl.add_argument("file")
+    pbl.add_argument("--json", action="store_true")
     return p
 
 
@@ -206,6 +273,8 @@ def main(argv: list[str] | None = None) -> int:
         "verify": _cmd_verify,
         "audit-repo": _cmd_audit_repo,
         "certify-hj": _cmd_certify_hj,
+        "certify-dhj": _cmd_certify_dhj,
+        "blueprint": _cmd_blueprint,
         "prove": _cmd_prove,
         "bench": _cmd_bench,
     }

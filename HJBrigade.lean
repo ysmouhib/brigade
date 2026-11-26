@@ -4,6 +4,9 @@ import HJBrigade.Core.Line
 import HJBrigade.Theorems.BaseAndAlphabetTwo
 import HJBrigade.Theorems.ColorFocusing
 import HJBrigade.Theorems.Shelah
+import HJBrigade.Theorems.MultidimensionalHJ
 import HJBrigade.Reductions.VanDerWaerden
 import HJBrigade.Certificates.CertTree
+import HJBrigade.Density.Sperner
+import HJBrigade.Density.ExactDHJ
 import HJBrigade.Theorems.ExactBounds

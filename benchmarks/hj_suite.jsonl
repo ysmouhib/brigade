@@ -6,3 +6,7 @@
 {"id": "vdw_8_3_2_trap", "problem": "Prove HasMonoAP 8 3 2", "expected": "refuted"}
 {"id": "hj_5_2_5_symbolic", "problem": "Prove HJUpper 5 2 5", "expected": "proved"}
 {"id": "hj_shelah_3_2", "problem": "Prove HJUpper (shelahHJDim 3 2) 3 2", "expected": "proved"}
+{"id": "mhj_shelah_2_3_2", "problem": "Prove MHJUpper 2 (mhjDim 2 3 2) 3 2", "expected": "proved"}
+{"id": "sperner_dhj_2", "problem": "Prove ∀ A : Word 5 2 → Bool, IsLineFree A → wordCard A ≤ natChoose 5 (5 / 2)", "expected": "proved"}
+{"id": "c_2_3_upper_symbolic", "problem": "Prove ∀ A : Word 2 3 → Bool, IsLineFree A → wordCard A ≤ 6", "expected": "proved"}
+{"id": "c_3_3_upper_symbolic", "problem": "Prove ∀ A : Word 3 3 → Bool, IsLineFree A → wordCard A ≤ 18", "expected": "proved"}

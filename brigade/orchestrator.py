@@ -1,4 +1,4 @@
-"""Chef control loop enforcing invariants I1-I4, HJ/VdW skeptic certificates, and persistent ledger."""
+"""Coordinator control loop enforcing invariants I1-I4, HJ/VdW/DHJ skeptic certificates, and persistent ledger."""
 
 from __future__ import annotations
 
@@ -195,17 +195,32 @@ class Orchestrator:
         self.emit("chef", "chef", "verified", msg, node.id)
 
     async def _try_symbolic_fastpath(self) -> bool:
-        """Try closing direct formal claims (`HJUpper ...` / `HasMonoAP ...`) via base cascades."""
+        """Try closing direct formal claims (`HJUpper`, `MHJUpper`, `HasMonoAP`, `IsLineFree`) via cascades."""
         candidate = _PROVE_PREFIX_RE.sub("", self.job.problem.strip()).rstrip(".")
-        if not any(tok in candidate for tok in ("HJUpper", "HasMonoAP", "shelahHJDim")):
+        if not any(
+            tok in candidate
+            for tok in ("HJUpper", "MHJUpper", "HasMonoAP", "shelahHJDim", "mhjDim", "IsLineFree", "wordCard")
+        ):
             return False
         thm_name = self._unique_name("thm_main")
         header = f"theorem {thm_name} : {candidate}"
         gate = await self._check_statement(header)
         if not gate.ok:
             return False
-        if "shelahHJDim" in candidate or "∃ d" in candidate or "∃ N" in candidate:
+        if "mhjDim" in candidate or "MHJUpper" in candidate:
+            symbolic_bodies = [
+                "exact mhj_shelah _ _ _ (by omega) (by omega)",
+                "exact multidimensional_hales_jewett _ _ _ (by omega) (by omega) (by omega)",
+            ]
+        elif "shelahHJDim" in candidate or "∃ d" in candidate or "∃ N" in candidate:
             symbolic_bodies = list(SHELAH_CASCADE_BODIES)
+        elif "IsLineFree" in candidate or "wordCard" in candidate:
+            symbolic_bodies = [
+                "exact sperner_dhj_two _",
+                "exact c_1_3_upper",
+                "exact c_2_3_upper",
+                "exact c_3_3_upper",
+            ]
         else:
             symbolic_bodies = [
                 "exact hj_one_color _",

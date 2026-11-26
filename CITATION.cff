@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+title: "hj-brigade: Formal Hales–Jewett Library and Kernel-Checked Combinatorial Prover in Lean 4"
+message: "If you use this Lean 4 library, certificates, or solver tools in your research, please cite this repository."
+authors:
+  - family-names: "Mouhib"
+    given-names: "Younes"
+repository-code: "https://github.com/ysmouhib/hj-brigade"
+license: "MIT"
+keywords:
+  - lean4
+  - ramsey-theory
+  - hales-jewett-theorem
+  - density-hales-jewett
+  - van-der-waerden-theorem
+  - formal-verification
+  - neuro-symbolic

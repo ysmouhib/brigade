@@ -287,6 +287,8 @@ class RealLeanVerifier:
         namespace: str | None = None,
     ) -> str:
         imp_list = imports if imports is not None else ["HJBrigade"]
+        if not imp_list and not namespace and not context.strip():
+            return code.strip() + "\n"
         header_lines = [f"import {m}" for m in imp_list]
         header_lines.append(f"set_option maxHeartbeats {self.max_heartbeats}")
         if namespace:

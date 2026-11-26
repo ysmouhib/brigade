@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lean-and-pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install elan and Lean 4.35.0
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -o elan-init.sh
+          sh elan-init.sh -y --default-toolchain leanprover/lean4:v4.35.0
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Build HJBrigade Lean 4 library
+        run: lake build
+
+      - name: Audit all theorem axioms and invariants
+        run: python scripts/run_cli.py audit-repo
+
+      - name: Run Ramsey & Hales-Jewett benchmark suite
+        run: python scripts/run_cli.py bench
+
+      - name: Run full pytest suite
+        run: |
+          python -m pip install pytest
+          python -m pytest -v

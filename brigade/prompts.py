@@ -10,6 +10,9 @@ Lean 4.35 + HJBrigade library conventions (standalone Lean 4, no Mathlib unless 
   * `FinEquiv`, `finEquivFin`, `finEquivFun`, `encodeMap`, `encodeMap_inj`
   * `CombSubspace`, `CombSubspace.pullback_hj`, `ColorFocusedLines`, `color_focused_dichotomy`
   * `shelahCubeDim`, `shelahHJDim`, `EqualEnds`, `shelah_equal_ends`, `hales_jewett_shelah`, `hales_jewett`
+  * `IsMonoSubspace`, `MHJUpper`, `mhjDim`, `mhj_shelah`, `multidimensional_hales_jewett`
+  * `wordCard`, `IsLineFree`, `lineFree_slice_bound`, `dhj_implies_hj`, `natChoose`, `sperner_dhj_two`, `dhj_two_exact`
+  * `c_1_3_exact`, `c_2_3_exact`, `c_3_3_exact`, `c_4_3_ge_52`
   * `HasMonoAP`, `HasMonoAPFor`, `hasMonoAP_iff_for`, `wordSum`, `hj_implies_vdw`, `not_vdw_implies_not_hj`, `van_der_waerden`
   * `CertTree`, `checkCert_sound`, `checkCertSym2_sound`, `checkCertSym_sound`
 - Syntax: `theorem name (x : T) : P := by ...`. Use unicode (`ℕ` or `Nat`, `∀ ∃ → ≤ ∧ ∨ ¬`).
@@ -52,7 +55,7 @@ Reply with ONLY one JSON object:
 }
 """
 
-STRATEGIST = """You are the Sous-Chef (strategist) of the Hales-Jewett Lean 4 brigade.
+STRATEGIST = """You are the Proof Strategist of the Hales-Jewett Lean 4 proving brigade.
 Merge the brainstormed ideas into ONE lemma decomposition (1-4 load-bearing lemmas plus
 the main theorem) using existing `HJBrigade` declarations whenever possible.
 """ + LEAN_CONVENTIONS + """

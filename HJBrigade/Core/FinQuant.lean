@@ -60,6 +60,17 @@ instance (n : Nat) : FinDomain (Fin n) where
   decForall := fun P _ => decForallFin n P
   decExists := fun P _ => decExistsFin n P
 
+instance : FinDomain Bool where
+  decForall := fun P _ =>
+    if h0 : P false then
+      if h1 : P true then isTrue (fun b => match b with | false => h0 | true => h1)
+      else isFalse (fun h => h1 (h true))
+    else isFalse (fun h => h0 (h false))
+  decExists := fun P _ =>
+    if h0 : P false then isTrue ⟨false, h0⟩
+    else if h1 : P true then isTrue ⟨true, h1⟩
+    else isFalse (fun ⟨b, hb⟩ => match b, hb with | false, h => h0 h | true, h => h1 h)
+
 instance {α : Type u} [FinDomain α] : FinDomain (Option α) where
   decForall := fun P _ =>
     if h0 : P none then
