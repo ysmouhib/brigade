@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hj-brigade"
+version = "0.2.0"
+description = "Neuro-symbolic Lean 4 proving brigade focused on Ramsey Theory and the Hales-Jewett theorem"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+hj-brigade = "brigade.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["brigade*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

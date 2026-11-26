@@ -1,0 +1,15 @@
+.lake/
+build/
+.venv/
+.brigade_scratch/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.olean
+*.ilean
+*.olean.private
+*.olean.server
+*.c
+*.hash
+.env
+.brigade_ledger.json

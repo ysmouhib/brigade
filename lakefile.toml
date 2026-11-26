@@ -1,0 +1,6 @@
+name = "hj_brigade"
+version = "0.1.0"
+defaultTargets = ["HJBrigade"]
+
+[[lean_lib]]
+name = "HJBrigade"

@@ -1,0 +1,8 @@
+{"id": "hj_2_2_2", "problem": "Prove HJUpper 2 2 2", "expected": "proved"}
+{"id": "hj_3_2_3", "problem": "Prove HJUpper 3 2 3", "expected": "proved"}
+{"id": "hj_4_3_2", "problem": "Prove HJUpper 4 3 2", "expected": "proved"}
+{"id": "hj_3_3_2_trap", "problem": "Prove HJUpper 3 3 2", "expected": "refuted"}
+{"id": "hj_3_3_2_lower", "problem": "Prove ¬ HJUpper 3 3 2", "expected": "proved"}
+{"id": "vdw_8_3_2_trap", "problem": "Prove HasMonoAP 8 3 2", "expected": "refuted"}
+{"id": "hj_5_2_5_symbolic", "problem": "Prove HJUpper 5 2 5", "expected": "proved"}
+{"id": "hj_shelah_3_2", "problem": "Prove HJUpper (shelahHJDim 3 2) 3 2", "expected": "proved"}
