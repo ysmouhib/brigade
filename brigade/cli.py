@@ -182,6 +182,32 @@ async def _cmd_certify_dhj(args: argparse.Namespace) -> int:
     return 0
 
 
+async def _cmd_certify_moser(args: argparse.Namespace) -> int:
+    proj = Path(args.project_dir).resolve()
+    res = density_hj.solve_moser(args.d)
+    print(
+        f"Moser(d={args.d}, k=3): max_found={res.size}/{res.num_words} "
+        f"(optimal={res.optimal}, time={res.elapsed_s:.3f}s)"
+    )
+    thm = args.theorem or f"moser_{args.d}_3_ge_{res.size}"
+    lean_src = density_hj.emit_moser_lower_lean(res, theorem_name=thm)
+    if args.out:
+        out_path = Path(args.out)
+        out_path.write_text(
+            "import HJBrigade\n\nnamespace HJBrigade\n\n" + lean_src + "\nend HJBrigade\n",
+            encoding="utf-8",
+        )
+        print(f"Wrote Moser witness to {out_path}")
+    if args.verify:
+        verifier = RealLeanVerifier(proj, timeout_s=args.lean_timeout)
+        chk = await verifier.check(lean_src)
+        aud = await verifier.axiom_audit(lean_src, thm)
+        print(f"Lean verification: {chk.summary()}")
+        print(f"Axiom audit ({thm}): ok={aud.ok} axioms={aud.axioms} {aud.note}")
+        return 0 if (chk.ok and chk.sorries == 0 and aud.ok) else 1
+    return 0
+
+
 async def _cmd_blueprint(args: argparse.Namespace) -> int:
     proj = Path(args.project_dir).resolve()
     report = await blueprint.inspect_blueprint(proj, Path(args.file).resolve())
@@ -258,6 +284,13 @@ def build_parser() -> argparse.ArgumentParser:
     pd.add_argument("--steps", type=int, default=1200)
     pd.add_argument("--lean-timeout", type=float, default=60.0)
 
+    pm = sub.add_parser("certify-moser", help="Find and Lean-verify geometric-line-free Moser lower bounds in [3]^d")
+    pm.add_argument("--d", type=int, required=True)
+    pm.add_argument("--theorem", default="")
+    pm.add_argument("--out", default="")
+    pm.add_argument("--verify", action="store_true")
+    pm.add_argument("--lean-timeout", type=float, default=60.0)
+
     pbl = sub.add_parser("blueprint", help="Extract sorry goals, premise hints, and axiom status for a Lean file")
     pbl.add_argument("file")
     pbl.add_argument("--json", action="store_true")
@@ -274,6 +307,7 @@ def main(argv: list[str] | None = None) -> int:
         "audit-repo": _cmd_audit_repo,
         "certify-hj": _cmd_certify_hj,
         "certify-dhj": _cmd_certify_dhj,
+        "certify-moser": _cmd_certify_moser,
         "blueprint": _cmd_blueprint,
         "prove": _cmd_prove,
         "bench": _cmd_bench,

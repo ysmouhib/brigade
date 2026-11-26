@@ -10,3 +10,7 @@
 {"id": "sperner_dhj_2", "problem": "Prove ∀ A : Word 5 2 → Bool, IsLineFree A → wordCard A ≤ natChoose 5 (5 / 2)", "expected": "proved"}
 {"id": "c_2_3_upper_symbolic", "problem": "Prove ∀ A : Word 2 3 → Bool, IsLineFree A → wordCard A ≤ 6", "expected": "proved"}
 {"id": "c_3_3_upper_symbolic", "problem": "Prove ∀ A : Word 3 3 → Bool, IsLineFree A → wordCard A ≤ 18", "expected": "proved"}
+{"id": "c_4_3_upper_polymath1", "problem": "Prove ∀ A : Word 4 3 → Bool, IsLineFree A → wordCard A ≤ 52", "expected": "proved"}
+{"id": "moser_3_3_upper_16", "problem": "Prove ∀ A : Word 3 3 → Bool, IsGeomLineFree A → wordCard A ≤ 16", "expected": "proved"}
+{"id": "hj_4_3_3_trap", "problem": "Prove HJUpper 4 3 3", "expected": "refuted"}
+{"id": "hj_4_4_2_trap", "problem": "Prove HJUpper 4 4 2", "expected": "refuted"}

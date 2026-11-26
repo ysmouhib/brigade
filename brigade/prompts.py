@@ -12,9 +12,11 @@ Lean 4.35 + HJBrigade library conventions (standalone Lean 4, no Mathlib unless 
   * `shelahCubeDim`, `shelahHJDim`, `EqualEnds`, `shelah_equal_ends`, `hales_jewett_shelah`, `hales_jewett`
   * `IsMonoSubspace`, `MHJUpper`, `mhjDim`, `mhj_shelah`, `multidimensional_hales_jewett`
   * `wordCard`, `IsLineFree`, `lineFree_slice_bound`, `dhj_implies_hj`, `natChoose`, `sperner_dhj_two`, `dhj_two_exact`
-  * `c_1_3_exact`, `c_2_3_exact`, `c_3_3_exact`, `c_4_3_ge_52`
+  * `c_1_3_exact`, `c_2_3_exact`, `c_3_3_exact`, `c_3_3_unique_18`, `c_4_3_exact`, `c_5_3_upper`, `c_6_3_upper`
+  * `fujimuraSet`, `fujimura_isLineFree`, `fujimura_lower_bound`, `c_5_3_ge_150`, `c_6_3_ge_450`
+  * `GeomLine`, `IsGeomLineFree`, `moser_1_3_exact`, `moser_2_3_exact`, `moser_3_3_exact`, `moser_3_3_strict_gap`, `moser_4_3_upper_48`, `moser_4_3_ge_43`
   * `HasMonoAP`, `HasMonoAPFor`, `hasMonoAP_iff_for`, `wordSum`, `hj_implies_vdw`, `not_vdw_implies_not_hj`, `van_der_waerden`
-  * `CertTree`, `checkCert_sound`, `checkCertSym2_sound`, `checkCertSym_sound`
+  * `CertTree`, `checkCert_sound`, `checkCertSym2_sound`, `checkCertSym_sound`, `hj_3_2_exact`, `hj_4_2_gt_4`, `hj_3_3_gt_4`, `vdw_3_2_exact`
 - Syntax: `theorem name (x : T) : P := by ...`. Use unicode (`ℕ` or `Nat`, `∀ ∃ → ≤ ∧ ∨ ¬`).
 - FORBIDDEN everywhere: `sorry`, `admit`, `axiom`, `native_decide`, `unsafe`, `opaque`, `partial`.
 - Kernel-checked `decide` IS allowed for finite decidable goals.

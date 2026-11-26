@@ -8,5 +8,8 @@ import HJBrigade.Theorems.MultidimensionalHJ
 import HJBrigade.Reductions.VanDerWaerden
 import HJBrigade.Certificates.CertTree
 import HJBrigade.Density.Sperner
+import HJBrigade.Density.Slice9
+import HJBrigade.Density.Fujimura
 import HJBrigade.Density.ExactDHJ
+import HJBrigade.Density.Moser
 import HJBrigade.Theorems.ExactBounds

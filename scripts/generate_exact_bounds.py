@@ -43,6 +43,14 @@ def main() -> None:
         "  ⟨hj_3_2_gt_3, hj_3_2_le_4⟩\n"
     )
 
+    r442 = solve_hj(4, 4, 2)
+    assert r442.status == "SAT_LINE_FREE"
+    parts.append(emit_lower_bound_lean(r442, theorem_name="hj_4_2_gt_4"))
+
+    r433 = solve_hj(4, 3, 3)
+    assert r433.status == "SAT_LINE_FREE"
+    parts.append(emit_lower_bound_lean(r433, theorem_name="hj_3_3_gt_4"))
+
     parts.append(
         "private def vdw_8_3_2_witness (i : Fin 8) : Fin 2 :=\n"
         "  ⟨([0, 0, 1, 1, 0, 0, 1, 1].getD i.val 0) % 2, Nat.mod_lt _ (by decide)⟩\n\n"

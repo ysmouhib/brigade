@@ -1,27 +1,35 @@
 # Open Research & Formalization Roadmap
 
-`HJBrigade` provides an axiom-clean, zero-Mathlib Lean 4 foundation for Hales–Jewett theory. Below are concrete open formalization milestones and research problems suited to combining interactive Lean agents with combinatorial certificate compilers:
+`HJBrigade` provides an axiom-clean, zero-Mathlib Lean 4 foundation for Hales–Jewett, Density Hales–Jewett, and Moser number formalization.
 
-## 1. Closing Polymath-1 $c_{4, 3} \le 52$ in Lean's Kernel
-- **Current status in `HJBrigade/Density/ExactDHJ.lean`**:
-  - `c_1_3_exact`: $c_{1,3} = 2$
-  - `c_2_3_exact`: $c_{2,3} = 6$
-  - `c_3_3_exact`: $c_{3,3} = 18$
-  - `c_4_3_ge_52`: Explicit 52-element line-free subset of $[3]^4$ verified in Lean's kernel.
-- **Next step**: Formalize the **equal-weight LP dual / Farkas certificate** (Polymath-1 proved $c_{4,3} = 52$ via fractional weights over $S_4 \times S_3$ symmetry orbits of $[3]^4$, reducing 81 vertices and 175 lines to a small integer dual witness `(w : Word 4 3 → Nat, c : Line 4 3 → Nat)` verifying $\sum_{w \in \text{line}} \text{coeff} \ge \text{RHS}$). A reflection theorem `checkFarkasDHJ_sound` (analogous to `checkCertSym_sound`) would close `c_4_3_exact : c_{4,3} = 52` purely inside Lean's kernel!
+## Completed Milestones
+1. **Unconditional Hales–Jewett, Multidimensional HJ & Van der Waerden** (`hales_jewett_shelah`, `multidimensional_hales_jewett`, `van_der_waerden`).
+2. **Exact Binary Density `DHJ(2)`** (`sperner_dhj_two`, `dhj_two_exact`: $c_{d, 2} = \binom{d}{\lfloor d/2 \rfloor}$ via constructive Greene–Kleitman symmetric chain decomposition).
+3. **Closed Polymath-1 Ternary Values $c_{1,3} .. c_{4,3}$**:
+   - `c_1_3_exact` ($2$), `c_2_3_exact` ($6$), `c_3_3_exact` ($18$) + `c_3_3_unique_18` (slice uniqueness) + **`c_4_3_exact` ($c_{4,3} = 52$)** via `third_slice_le_9`.
+4. **Fujimura $S_d$-Symmetric Reduction & $d = 5, 6$ Witnesses**:
+   - `fujimura_isLineFree` + `wordCard_fujimuraSet` proving **`c_5_3_ge_150`** and **`c_6_3_ge_450`**, paired with slice upper bounds **`c_5_3_upper`** ($\le 156$) and **`c_6_3_upper`** ($\le 468$).
+5. **Geometric Lines & Moser Numbers $c'_{1,3} .. c'_{4,3}$**:
+   - `moser_1_3_exact` ($2$), `moser_2_3_exact` ($6$), **`moser_3_3_exact` ($16$)**, **`moser_3_3_strict_gap`** ($c'_{3,3} = 16 < 18 = c_{3,3}$), **`moser_4_3_upper_48`** ($\le 48$), and **`moser_4_3_ge_43`** ($\ge 43$).
+6. **Finite Coloring Bounds**:
+   - `hj_two_exact` ($HJ(2, r) = r$), `hj_3_2_exact` ($HJ(3, 2) = 4$), `vdw_3_2_exact` ($W(3, 2) = 9$), **`hj_4_2_gt_4`** ($HJ(4, 2) > 4$), **`hj_3_3_gt_4`** ($HJ(3, 3) > 4$).
 
-## 2. Exact Coloring Bounds Beyond `HJ(3, 2) = 4`
-- **Current status**: `HJ(2, r) = r` proved for all $r \ge 1$ (`hj_two_exact`); `HJ(3, 2) = 4` (`hj_3_2_exact`); general $r$-color symmetry reflection (`checkCertSym_sound`) proved.
-- **Open targets**:
-  - Machine-check $HJ(3, 3)$ bounds: lower bound search ($[3]^d$ with 3 colors; note Hindman–Tressler bounds) and SAT/DRAT-style reflection checking (`CertTree` + symmetry under $S_d \times S_3$!) for `HJUpper d 3 3`.
-  - Machine-check $HJ(4, 2)$ bounds (note $HJ(4, 2) > 5$ vs upper bounds via symmetry-broken CDCL certificates).
+---
 
-## 3. Full Asymptotic Density Hales–Jewett (`DHJ(3)` / `DHJ(k)`)
-- **Current status**: `dhj_two_exact` (exact $c_{d, 2} = \binom{d}{\lfloor d/2 \rfloor}$ via constructive Symmetric Chain Decomposition) and `dhj_implies_hj` (density $\implies$ coloring transfer).
-- **Next step**: Formalize Polymath-1's elementary density-increment proof of **`DHJ(3)`** (mean-square / equal-slices entropy or combinatorial density increment on $[3]^d$), then connect `dhj_implies_hj` to obtain a **density proof of `HJ(3, r)`** and **Roth's theorem (`r_3(N) = o(N)`)** via `wordSum`!
+## Next Open Formalization Targets
 
-## 4. Tightening `shelahHJDim` & Mathlib Interop
-- Optimize `shelahCubeDim` / `shelahHJDim` (currently explicit primitive-recursive tower) and establish the `HJBrigade.Line d k ≃ Combinatorics.Line (Fin k) (Fin d)` bridge described in [MATHLIB_BRIDGE.md](MATHLIB_BRIDGE.md).
+### 1. Closing Moser $c'_{4, 3} \le 43$ via Exact Orbital LP / Farkas Certificate
+- **Current status**: `43 ≤ c'_{4,3} ≤ 48` (`moser_4_3_ge_43`, `moser_4_3_upper_48`). Notice our slice bound already proves $c'_{4,3} \le 48$, while Polymath-1 proved $c'_{4,3} = 43$ via fractional line-weight duals over $[3]^4$'s geometric lines ($S_4 \times \mathbb{Z}_2$).
+- **Next step**: Formalize a kernel-checked integer Farkas reflection theorem `checkFarkasMoser_sound` proving $\sum_w c_w \mathbf{1}_A(w) \le M$ from line weights $y_L \ge 0$ (`c'_{4,3} = 43` is tight in Polymath-1's LP dual + one-point branching!).
 
-## 5. Geometric Lines (Moser Numbers $c'_{d, k}$)
-- Extend `Line d k` to **geometric lines** (`±1` direction vectors in $[k]^d$ as well as `+1` combinatorial lines) and compile exact Moser witnesses & Farkas upper certificates for $c'_{d, 3}$ ($c'_{1,3}=2, c'_{2,3}=6, c'_{3,3}=16, c'_{4,3}=43$).
+### 2. Narrowing $150 \le c_{5, 3} \le 156$ (In Fact $c_{5, 3} = 150$)
+- **Current status**: `c_5_3_ge_150` and `c_5_3_upper` ($156$). Polymath-1 established $c_{5,3} = 150$ using slice stability around the $[3]^4$ extremal sets and combinatorial line double-counting.
+- **Next step**: Classify 52-point and 51-point line-free slices of $[3]^4$ (analogous to `c_3_3_unique_18` via `Slice9`) to close `c_5_3_exact : c_{5,3} = 150`.
+
+### 3. Upper Bounds for `HJ(3, 3)` and `HJ(4, 2)`
+- **Current status**: Lower bounds `hj_3_3_gt_4` ($> 4$) and `hj_4_2_gt_4` ($> 4$), plus general $r$-color reflection `checkCertSym_sound`.
+- **Next step**: Add coordinate-permutation symmetry breaking ($S_d$) to `CertTree` or compile SAT/DRAT-style branching trees (`HJ(3,3) ≤ 5` or `6`, `HJ(4,2)`).
+
+### 4. Full Asymptotic Density Hales–Jewett (`DHJ(3)` / `DHJ(k)`)
+- **Current status**: `dhj_two_exact` (arbitrary $d$) and `dhj_implies_hj`.
+- **Next step**: Formalize Polymath-1's equal-slices / mean-square density-increment proof of asymptotic **`DHJ(3)`**, yielding an alternative density proof of `HJ(3, r)` and Roth's theorem (`r_3(N) = o(N)`) via `wordSum`.

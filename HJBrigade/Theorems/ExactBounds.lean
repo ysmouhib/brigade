@@ -965,6 +965,36 @@ theorem hj_3_2_le_4 : HJUpper 4 3 2 := by
 theorem hj_3_2_exact : ¬ HJUpper 3 3 2 ∧ HJUpper 4 3 2 :=
   ⟨hj_3_2_gt_3, hj_3_2_le_4⟩
 
+private def hj_4_2_gt_4_coloring_tbl : List Nat := [0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1]
+
+private def hj_4_2_gt_4_coloring_idx (w : Word 4 4) : Nat :=
+  (List.range 4).foldl (fun acc i =>
+    if hi : i < 4 then acc + (w ⟨i, hi⟩).val * 4 ^ i else acc) 0
+
+private def hj_4_2_gt_4_coloring (w : Word 4 4) : Fin 2 :=
+  ⟨(hj_4_2_gt_4_coloring_tbl.getD (hj_4_2_gt_4_coloring_idx w) 0) % 2, Nat.mod_lt _ (by decide)⟩
+
+theorem hj_4_2_gt_4 : ¬ HJUpper 4 4 2 := by
+  intro h
+  have hmono : HasMonoLine 4 4 2 hj_4_2_gt_4_coloring := h hj_4_2_gt_4_coloring
+  revert hmono
+  decide
+
+private def hj_3_3_gt_4_coloring_tbl : List Nat := [2, 0, 0, 2, 1, 0, 0, 2, 2, 0, 1, 2, 0, 1, 2, 2, 0, 0, 1, 0, 0, 2, 2, 0, 2, 0, 2, 2, 1, 2, 0, 0, 1, 2, 1, 0, 0, 2, 1, 1, 1, 0, 0, 1, 0, 0, 2, 0, 1, 1, 2, 1, 0, 1, 0, 2, 0, 1, 0, 2, 1, 2, 2, 1, 2, 0, 2, 0, 0, 2, 0, 1, 0, 0, 1, 1, 2, 1, 2, 1, 2]
+
+private def hj_3_3_gt_4_coloring_idx (w : Word 4 3) : Nat :=
+  (List.range 4).foldl (fun acc i =>
+    if hi : i < 4 then acc + (w ⟨i, hi⟩).val * 3 ^ i else acc) 0
+
+private def hj_3_3_gt_4_coloring (w : Word 4 3) : Fin 3 :=
+  ⟨(hj_3_3_gt_4_coloring_tbl.getD (hj_3_3_gt_4_coloring_idx w) 0) % 3, Nat.mod_lt _ (by decide)⟩
+
+theorem hj_3_3_gt_4 : ¬ HJUpper 4 3 3 := by
+  intro h
+  have hmono : HasMonoLine 4 3 3 hj_3_3_gt_4_coloring := h hj_3_3_gt_4_coloring
+  revert hmono
+  decide
+
 private def vdw_8_3_2_witness (i : Fin 8) : Fin 2 :=
   ⟨([0, 0, 1, 1, 0, 0, 1, 1].getD i.val 0) % 2, Nat.mod_lt _ (by decide)⟩
 

@@ -199,7 +199,16 @@ class Orchestrator:
         candidate = _PROVE_PREFIX_RE.sub("", self.job.problem.strip()).rstrip(".")
         if not any(
             tok in candidate
-            for tok in ("HJUpper", "MHJUpper", "HasMonoAP", "shelahHJDim", "mhjDim", "IsLineFree", "wordCard")
+            for tok in (
+                "HJUpper",
+                "MHJUpper",
+                "HasMonoAP",
+                "shelahHJDim",
+                "mhjDim",
+                "IsGeomLineFree",
+                "IsLineFree",
+                "wordCard",
+            )
         ):
             return False
         thm_name = self._unique_name("thm_main")
@@ -214,12 +223,22 @@ class Orchestrator:
             ]
         elif "shelahHJDim" in candidate or "∃ d" in candidate or "∃ N" in candidate:
             symbolic_bodies = list(SHELAH_CASCADE_BODIES)
+        elif "IsGeomLineFree" in candidate:
+            symbolic_bodies = [
+                "exact moser_1_3_upper",
+                "exact moser_2_3_upper",
+                "exact moser_3_3_upper",
+                "exact moser_4_3_upper_48",
+            ]
         elif "IsLineFree" in candidate or "wordCard" in candidate:
             symbolic_bodies = [
                 "exact sperner_dhj_two _",
                 "exact c_1_3_upper",
                 "exact c_2_3_upper",
                 "exact c_3_3_upper",
+                "exact c_4_3_upper",
+                "exact c_5_3_upper",
+                "exact c_6_3_upper",
             ]
         else:
             symbolic_bodies = [
