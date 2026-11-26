@@ -26,8 +26,6 @@ class DHJSearchResult:
 def generate_geom_lines(d: int) -> list[tuple[tuple[int | str, ...], tuple[int, ...]]]:
     """Generate all unique geometric lines in `[3]^d` (where active coords move by `+1` or `-1`)."""
     words = list(itertools.product(range(3), repeat=d))
-    idx = {tuple(reversed(w)): sum(w[i] * (3**i) for i in range(d)) for w in words}
-    # Ensure canonical little-endian index: w[0] + 3*w[1] + ... matching Lean foldl
     idx = {w: sum(w[i] * (3**i) for i in range(d)) for w in words}
     seen: set[tuple[int, ...]] = set()
     lines: list[tuple[tuple[int | str, ...], tuple[int, ...]]] = []

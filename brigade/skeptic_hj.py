@@ -157,8 +157,6 @@ def solve_hj(
         )
 
     if k == 1:
-        cert = CertWitness(mask=tuple([None] * d), color=0)
-        # Need root point assigned unless we split once or note k=1 assigns pt 0
         tree = CertSplit(pt_idx=0, branches=[CertWitness(mask=tuple([None] * d), color=c) for c in range(r)])
         return HJSearchResult(
             d=d, k=k, r=r, status="UNSAT_MONO_FORCED",

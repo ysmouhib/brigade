@@ -6,11 +6,13 @@ import json
 from pathlib import Path
 import re
 
+from .lean_verifier import strip_lean_comments
 from .models import NodeStatus, PremiseEntry, ProofNode
 
 _DECL_RE = re.compile(
     r"^(theorem|lemma|def|abbrev|structure|inductive|class)\s+([A-Za-z_][A-Za-z0-9_.']*)\b(.*)$"
 )
+_THM_PREFIX_RE = re.compile(r"^(?:theorem|lemma)\s+[A-Za-z_][A-Za-z0-9_.']*\s*")
 _TOKEN_RE = re.compile(r"[A-Za-z0-9_']+")
 
 
@@ -30,11 +32,14 @@ class PremiseIndex:
         for path in sorted(lib_dir.rglob("*.lean")):
             rel = path.relative_to(self.project_dir).with_suffix("")
             module = ".".join(rel.parts)
-            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            raw_text = path.read_text(encoding="utf-8", errors="replace")
+            lines = raw_text.splitlines()
+            clean_lines = strip_lean_comments(raw_text).splitlines()
             pending_doc = ""
             i = 0
             while i < len(lines):
                 stripped = lines[i].strip()
+                clean_stripped = (clean_lines[i] if i < len(clean_lines) else "").strip()
                 if stripped.startswith("/--"):
                     doc_lines = [stripped]
                     while not doc_lines[-1].endswith("-/") and i + 1 < len(lines):
@@ -43,7 +48,7 @@ class PremiseIndex:
                     pending_doc = " ".join(doc_lines).strip("/- ")
                     i += 1
                     continue
-                m = _DECL_RE.match(stripped)
+                m = _DECL_RE.match(clean_stripped)
                 if m:
                     kind, name, rest = m.group(1), m.group(2), m.group(3)
                     sig_parts = [f"{kind} {name}{rest}"]
@@ -51,8 +56,8 @@ class PremiseIndex:
                     while j + 1 < len(lines):
                         if ":=" in sig_parts[-1] or "where" in sig_parts[-1]:
                             break
-                        nxt = lines[j + 1].strip()
-                        if not nxt or nxt.startswith(("--", "theorem ", "lemma ", "def ", "end ")):
+                        nxt = (clean_lines[j + 1] if j + 1 < len(clean_lines) else "").strip()
+                        if not nxt or nxt.startswith(("theorem ", "lemma ", "def ", "end ")):
                             break
                         j += 1
                         sig_parts.append(nxt)
@@ -68,7 +73,7 @@ class PremiseIndex:
                         )
                     )
                     pending_doc = ""
-                elif stripped and not stripped.startswith("--"):
+                elif clean_stripped:
                     pending_doc = ""
                 i += 1
 
@@ -135,9 +140,14 @@ class ProofLedger:
     def get_verified(self) -> list[ProofNode]:
         return [n for n in self.nodes.values() if n.status == NodeStatus.VERIFIED]
 
-    def find_matching_statement(self, statement: str) -> ProofNode | None:
+    @staticmethod
+    def _normalize_statement_body(statement: str) -> str:
         norm = " ".join(statement.split())
+        return _THM_PREFIX_RE.sub("", norm)
+
+    def find_matching_statement(self, statement: str) -> ProofNode | None:
+        key = self._normalize_statement_body(statement)
         for n in self.nodes.values():
-            if n.status == NodeStatus.VERIFIED and " ".join(n.lean_statement.split()) == norm:
+            if n.status == NodeStatus.VERIFIED and self._normalize_statement_body(n.lean_statement) == key:
                 return n
         return None

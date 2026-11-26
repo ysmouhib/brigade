@@ -1,12 +1,12 @@
-# `hj-brigade` — Lean 4 Formalization & Neuro-Symbolic Proving Toolkit for Hales–Jewett and Ramsey Theory
+# `brigade` (`HJBrigade`) — Lean 4 Formalization & Neuro-Symbolic Prover for Hales–Jewett and Ramsey Theory
 
-[![CI](https://github.com/ysmouhib/hj-brigade/actions/workflows/ci.yml/badge.svg)](https://github.com/ysmouhib/hj-brigade/actions/workflows/ci.yml)
+[![CI](https://github.com/ysmouhib/brigade/actions/workflows/ci.yml/badge.svg)](https://github.com/ysmouhib/brigade/actions/workflows/ci.yml)
 [![Lean 4.35.0](https://img.shields.io/badge/Lean-4.35.0-blue.svg)](lean-toolchain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-`hj-brigade` is a self-contained, zero-`sorry`, zero-`native_decide` **Lean 4.35.0** formalization library and combinatorial certificate toolkit focused on **Ramsey Theory**, the **Hales–Jewett theorem**, **Multidimensional Hales–Jewett**, **Van der Waerden's theorem**, **Density Hales–Jewett (`DHJ`)**, and **Moser numbers** over $[3]^d$.
+`brigade` is a self-contained, zero-`sorry`, zero-`native_decide` **Lean 4.35.0** formalization library (`HJBrigade`) and combinatorial certificate toolkit focused on **Ramsey Theory**, the **Hales–Jewett theorem**, **Multidimensional Hales–Jewett**, **Van der Waerden's theorem**, **Density Hales–Jewett (`DHJ`)**, and **Moser numbers** over $[3]^d$.
 
-It replaces the mock architecture of [`ysmouhib/brigade`](https://github.com/ysmouhib/brigade) (`FakeLean` + empty `lean/` directory) with real kernel-verified Lean proofs, fast DPLL/density/Fujimura certificate compilers, and agent-native tooling (`blueprint`, `index`, `audit-repo`, `bench`).
+It completely rebuilds [`ysmouhib/brigade`](https://github.com/ysmouhib/brigade) from the ground up with 112 kernel-verified Lean 4 theorems across 15 modules, fast DPLL/density/Fujimura/Moser certificate compilers, invariant-enforcing verification (`I1`–`I4`), and agent-native tooling (`blueprint`, `index`, `audit-repo`, `bench`).
 
 ---
 
@@ -32,7 +32,7 @@ Every exported theorem passes static linting (`I4`) and `#print axioms` (`I2`), 
 
 ---
 
-## How to Use `hj-brigade` for Research
+## How to Use `brigade` (`HJBrigade`) for Research
 
 ### 1. Build & Audit Everything (Zero Mathlib Download Required)
 

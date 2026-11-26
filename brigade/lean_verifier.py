@@ -33,12 +33,10 @@ FORBIDDEN_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 _ERROR_RE = re.compile(r"^[^:\n]+(?::[^:\n]+)*:(\d+):(\d+):\s*error:\s*(.*)$")
 _WARN_RE = re.compile(r"^[^:\n]+(?::[^:\n]+)*:(\d+):(\d+):\s*warning:\s*(.*)$")
 _INFO_RE = re.compile(r"^[^:\n]+(?::[^:\n]+)*:(\d+):(\d+):\s*info:\s*(.*)$")
-_AXIOMS_RE = re.compile(r"'([^']+)'\s+depends on axioms:\s*\[([^\]]*)\]")
-_NO_AXIOMS_RE = re.compile(r"'([^']+)'\s+does not depend on any axioms")
 _SORRY_GOAL_RE = re.compile(r"declaration uses [`']sorry[`']")
 
 
-def _strip_lean_comments(text: str) -> str:
+def strip_lean_comments(text: str) -> str:
     """Strip `--` line comments and nested `/- ... -/` block comments/docstrings."""
     out: list[str] = []
     n = len(text)
@@ -101,9 +99,12 @@ def _strip_lean_comments(text: str) -> str:
     return "".join(out)
 
 
+_strip_lean_comments = strip_lean_comments
+
+
 def lint_proof(body: str) -> list[str]:
     """Enforce Invariant I4: forbid cheat tokens and non-kernel shortcuts in proof bodies."""
-    cleaned = _strip_lean_comments(body)
+    cleaned = strip_lean_comments(body)
     hits: list[str] = []
     for label, pat in FORBIDDEN_PATTERNS:
         if pat.search(cleaned):
@@ -333,6 +334,29 @@ class RealLeanVerifier:
         stmt_code = f"{theorem_header.strip()} := by\n  trace_state\n  sorry"
         return await self.check(stmt_code, context=context, imports=imports, namespace=namespace)
 
+    @staticmethod
+    def _parse_axiom_output(raw: str, theorem_name: str) -> AuditResult:
+        pat_none = re.compile(rf"'(?:[^']*\.)?{re.escape(theorem_name)}'\s+does not depend on any axioms")
+        pat_ax = re.compile(rf"'(?:[^']*\.)?{re.escape(theorem_name)}'\s+depends on axioms:\s*\[([^\]]*)\]")
+        none_matches = list(pat_none.finditer(raw))
+        ax_matches = list(pat_ax.finditer(raw))
+        if none_matches and (not ax_matches or none_matches[-1].start() > ax_matches[-1].start()):
+            return AuditResult(ok=True, theorem_name=theorem_name, axioms=[], note="axiom-free")
+        if ax_matches:
+            axioms = [a.strip() for a in ax_matches[-1].group(1).split(",") if a.strip()]
+            bad = [a for a in axioms if a not in STANDARD_AXIOMS]
+            return AuditResult(
+                ok=(not bad),
+                theorem_name=theorem_name,
+                axioms=axioms,
+                note="" if not bad else f"forbidden non-standard axioms: {bad}",
+            )
+        return AuditResult(
+            ok=False,
+            theorem_name=theorem_name,
+            note=f"No `#print axioms` output found for `{theorem_name}`",
+        )
+
     async def axiom_audit(
         self,
         code: str,
@@ -356,24 +380,7 @@ class RealLeanVerifier:
                 theorem_name=theorem_name,
                 note="; ".join(res.errors[:2]) or f"{res.sorries} sorry(ies) present",
             )
-        raw = res.raw_output
-        if _NO_AXIOMS_RE.search(raw):
-            return AuditResult(ok=True, theorem_name=theorem_name, axioms=[], note="axiom-free")
-        m = _AXIOMS_RE.search(raw)
-        if not m:
-            return AuditResult(
-                ok=False,
-                theorem_name=theorem_name,
-                note=f"Could not parse `#print axioms {theorem_name}` from Lean output",
-            )
-        axioms = [a.strip() for a in m.group(2).split(",") if a.strip()]
-        bad = [a for a in axioms if a not in STANDARD_AXIOMS]
-        return AuditResult(
-            ok=(not bad),
-            theorem_name=theorem_name,
-            axioms=axioms,
-            note="" if not bad else f"forbidden non-standard axioms: {bad}",
-        )
+        return self._parse_axiom_output(res.raw_output, theorem_name)
 
     async def audit_existing_module(
         self, module_name: str, theorem_names: list[str], namespace: str | None = "HJBrigade"
@@ -383,36 +390,10 @@ class RealLeanVerifier:
             return []
         lines = [f"#print axioms {name}" for name in theorem_names]
         res = await self.check("\n".join(lines), imports=[module_name], namespace=namespace)
-        results: list[AuditResult] = []
-        raw = res.raw_output
-        for name in theorem_names:
-            if not res.ok:
-                results.append(AuditResult(ok=False, theorem_name=name, note="; ".join(res.errors[:2])))
-                continue
-            pat_none = re.compile(rf"'(?:[^']*\.)?{re.escape(name)}'\s+does not depend on any axioms")
-            pat_ax = re.compile(rf"'(?:[^']*\.)?{re.escape(name)}'\s+depends on axioms:\s*\[([^\]]*)\]")
-            if pat_none.search(raw):
-                results.append(AuditResult(ok=True, theorem_name=name, axioms=[], note="axiom-free"))
-            elif (m := pat_ax.search(raw)):
-                axioms = [a.strip() for a in m.group(1).split(",") if a.strip()]
-                bad = [a for a in axioms if a not in STANDARD_AXIOMS]
-                results.append(
-                    AuditResult(
-                        ok=(not bad),
-                        theorem_name=name,
-                        axioms=axioms,
-                        note="" if not bad else f"forbidden axioms: {bad}",
-                    )
-                )
-            else:
-                results.append(
-                    AuditResult(
-                        ok=False,
-                        theorem_name=name,
-                        note=f"No `#print axioms` output found for `{name}`",
-                    )
-                )
-        return results
+        if not res.ok:
+            err = "; ".join(res.errors[:2])
+            return [AuditResult(ok=False, theorem_name=name, note=err) for name in theorem_names]
+        return [self._parse_axiom_output(res.raw_output, name) for name in theorem_names]
 
     async def close(self) -> None:
         return None

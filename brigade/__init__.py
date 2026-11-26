@@ -1,4 +1,4 @@
-"""hj-brigade: Neuro-symbolic Lean 4 prover for Ramsey Theory & Hales-Jewett."""
+"""brigade: Lean 4 (HJBrigade) formalization & neuro-symbolic prover for Ramsey Theory and Hales-Jewett."""
 
 from .models import (
     AgentEvent,

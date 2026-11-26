@@ -53,6 +53,36 @@ class TestBlueprintInspector(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(items["open_mhj"]["has_sorry"])
             self.assertTrue(items["open_mhj"]["goals"], "Expected trace_state goal for open_mhj")
 
+    async def test_blueprint_ignores_sorry_in_docstrings_and_comments(self) -> None:
+        doc_with_sorry = """import HJBrigade
+
+/-!
+Module note: zero `sorry` and zero `native_decide`.
+theorem fake_in_comment : False := by sorry
+-/
+
+namespace HJBrigade
+
+-- Wait: theorem comment_only : False := by sorry
+theorem clean_thm : HJUpper 2 2 2 := by
+  exact hj_two_upper 2
+
+end HJBrigade
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "CleanDoc.lean"
+            p.write_text(doc_with_sorry, encoding="utf-8")
+            report = await inspect_blueprint(PROJECT_DIR, p)
+
+            self.assertTrue(report["compile_ok"], report["errors"])
+            self.assertEqual(report["total_theorems"], 1)
+            self.assertEqual(report["completed_count"], 1)
+            self.assertEqual(report["open_count"], 0)
+            item = report["items"][0]
+            self.assertEqual(item["name"], "clean_thm")
+            self.assertFalse(item["has_sorry"])
+            self.assertTrue(item["axiom_ok"], item["note"])
+
 
 class TestBlueprintCli(unittest.TestCase):
     def test_cli_blueprint_smoke(self) -> None:

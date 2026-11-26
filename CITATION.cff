@@ -1,10 +1,10 @@
 cff-version: 1.2.0
-title: "hj-brigade: Formal Hales–Jewett Library and Kernel-Checked Combinatorial Prover in Lean 4"
+title: "Brigade: Lean 4 Formalization and Kernel-Checked Combinatorial Prover for Hales–Jewett and Ramsey Theory"
 message: "If you use this Lean 4 library, certificates, or solver tools in your research, please cite this repository."
 authors:
   - family-names: "Mouhib"
     given-names: "Younes"
-repository-code: "https://github.com/ysmouhib/hj-brigade"
+repository-code: "https://github.com/ysmouhib/brigade"
 license: "MIT"
 keywords:
   - lean4

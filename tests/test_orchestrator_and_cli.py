@@ -236,6 +236,46 @@ class TestOrchestratorAndCLI(unittest.IsolatedAsyncioTestCase):
         rc_audit = cli_main(["--project-dir", str(PROJECT_DIR), "audit-repo"])
         self.assertEqual(rc_audit, 0)
 
+    def test_cross_round_ledger_reuse_and_assembly(self) -> None:
+        from brigade.library_index import ProofLedger
+        from brigade.models import Job, NodeStatus, ProofNode
+        from brigade.orchestrator import Orchestrator, OrchestratorConfig
+        from brigade.llm import ScriptedLLM
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger_file = Path(tmp) / "ledger.json"
+            ledger = ProofLedger(ledger_file)
+            helper = ProofNode(
+                kind="lemma",
+                lean_name="lemma_0",
+                lean_statement="theorem lemma_0 : HJUpper 2 2 2",
+                lean_proof="exact hj_two_upper 2",
+                status=NodeStatus.VERIFIED,
+            )
+            ledger.add_verified(helper)
+
+            # Matching ignores declaration name differences across rounds
+            matched = ledger.find_matching_statement("theorem lemma_9 : HJUpper 2 2 2")
+            self.assertIsNotNone(matched)
+            assert matched is not None
+            self.assertEqual(matched.lean_name, "lemma_0")
+
+            cfg = OrchestratorConfig(project_dir=PROJECT_DIR, ledger_path=ledger_file)
+            job = Job(problem="Test ledger assembly")
+            root = ProofNode(
+                kind="theorem",
+                lean_name="thm_main",
+                lean_statement="theorem thm_main : HJUpper 2 2 2",
+                lean_proof="exact lemma_0",
+                status=NodeStatus.VERIFIED,
+            )
+            job.nodes[root.id] = root
+            job.root_id = root.id
+            orch = Orchestrator(job, ScriptedLLM(lambda *_: {}), self.verifier, cfg)
+            assembled = orch._assemble_final(root)
+            self.assertIn("theorem lemma_0 : HJUpper 2 2 2", assembled)
+            self.assertLess(assembled.index("theorem lemma_0"), assembled.index("theorem thm_main"))
+
 
 if __name__ == "__main__":
     unittest.main()

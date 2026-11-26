@@ -75,8 +75,13 @@ class TestVerifierInvariants(unittest.IsolatedAsyncioTestCase):
             res_raw.raw_output,
         )
 
-        # Custom axiom smuggling is caught
-        axiom_code = "axiom cheat_hj : HJUpper 1 3 2\ntheorem test_cheat : HJUpper 1 3 2 := cheat_hj"
+        # Custom axiom smuggling is caught even when an earlier `#print axioms` prints clean output
+        axiom_code = (
+            "theorem helper_clean : HJUpper 2 2 2 := by exact hj_two_upper 2\n"
+            "#print axioms helper_clean\n"
+            "axiom cheat_hj : HJUpper 1 3 2\n"
+            "theorem test_cheat : HJUpper 1 3 2 := cheat_hj"
+        )
         aud_ax = await self.verifier.axiom_audit(axiom_code, "test_cheat")
         self.assertFalse(aud_ax.ok)
 

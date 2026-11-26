@@ -1,4 +1,4 @@
-# Agent Guide for `hj-brigade`
+# Agent Guide for `brigade` (`HJBrigade`)
 
 When developing or proving new Ramsey Theory / Hales–Jewett theorems in this repository (whether using an interactive coding agent such as Antigravity / Claude Code / Cursor, or an automated proving pipeline), follow this workflow:
 

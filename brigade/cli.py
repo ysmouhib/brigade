@@ -1,4 +1,4 @@
-"""Command-line interface for hj-brigade."""
+"""Command-line interface for brigade (HJBrigade Lean 4 Ramsey & Hales-Jewett prover)."""
 
 from __future__ import annotations
 
@@ -76,6 +76,32 @@ async def _cmd_audit_repo(args: argparse.Namespace) -> int:
     return 0 if failed == 0 else 1
 
 
+async def _write_and_verify_certificate(
+    proj: Path,
+    lean_src: str,
+    thm: str,
+    out: str,
+    verify: bool,
+    lean_timeout: float,
+    label: str = "certificate",
+) -> int:
+    if out:
+        out_path = Path(out)
+        out_path.write_text(
+            "import HJBrigade\n\nnamespace HJBrigade\n\n" + lean_src + "\nend HJBrigade\n",
+            encoding="utf-8",
+        )
+        print(f"Wrote {label} to {out_path}")
+    if verify:
+        verifier = RealLeanVerifier(proj, timeout_s=lean_timeout)
+        chk = await verifier.check(lean_src)
+        aud = await verifier.axiom_audit(lean_src, thm)
+        print(f"Lean verification: {chk.summary()}")
+        print(f"Axiom audit ({thm}): ok={aud.ok} axioms={aud.axioms} {aud.note}")
+        return 0 if (chk.ok and chk.sorries == 0 and aud.ok) else 1
+    return 0
+
+
 async def _cmd_certify_hj(args: argparse.Namespace) -> int:
     proj = Path(args.project_dir).resolve()
     res = skeptic_hj.solve_hj(
@@ -93,20 +119,9 @@ async def _cmd_certify_hj(args: argparse.Namespace) -> int:
     else:
         thm = args.theorem or f"hj_{args.k}_{args.r}_le_{args.d}"
         lean_src = skeptic_hj.emit_upper_bound_lean(res, theorem_name=thm)
-
-    if args.out:
-        out_path = Path(args.out)
-        out_path.write_text("import HJBrigade\n\nnamespace HJBrigade\n\n" + lean_src + "\nend HJBrigade\n", encoding="utf-8")
-        print(f"Wrote certificate to {out_path}")
-
-    if args.verify:
-        verifier = RealLeanVerifier(proj, timeout_s=args.lean_timeout)
-        chk = await verifier.check(lean_src)
-        aud = await verifier.axiom_audit(lean_src, thm)
-        print(f"Lean verification: {chk.summary()}")
-        print(f"Axiom audit ({thm}): ok={aud.ok} axioms={aud.axioms} {aud.note}")
-        return 0 if (chk.ok and chk.sorries == 0 and aud.ok) else 1
-    return 0
+    return await _write_and_verify_certificate(
+        proj, lean_src, thm, args.out, args.verify, args.lean_timeout, label="certificate"
+    )
 
 
 def _cmd_index(args: argparse.Namespace) -> int:
@@ -165,21 +180,9 @@ async def _cmd_certify_dhj(args: argparse.Namespace) -> int:
     )
     thm = args.theorem or f"dhj_{args.d}_{args.k}_ge_{res.size}"
     lean_src = density_hj.emit_dhj_lower_lean(res, theorem_name=thm)
-    if args.out:
-        out_path = Path(args.out)
-        out_path.write_text(
-            "import HJBrigade\n\nnamespace HJBrigade\n\n" + lean_src + "\nend HJBrigade\n",
-            encoding="utf-8",
-        )
-        print(f"Wrote density witness to {out_path}")
-    if args.verify:
-        verifier = RealLeanVerifier(proj, timeout_s=args.lean_timeout)
-        chk = await verifier.check(lean_src)
-        aud = await verifier.axiom_audit(lean_src, thm)
-        print(f"Lean verification: {chk.summary()}")
-        print(f"Axiom audit ({thm}): ok={aud.ok} axioms={aud.axioms} {aud.note}")
-        return 0 if (chk.ok and chk.sorries == 0 and aud.ok) else 1
-    return 0
+    return await _write_and_verify_certificate(
+        proj, lean_src, thm, args.out, args.verify, args.lean_timeout, label="density witness"
+    )
 
 
 async def _cmd_certify_moser(args: argparse.Namespace) -> int:
@@ -191,21 +194,9 @@ async def _cmd_certify_moser(args: argparse.Namespace) -> int:
     )
     thm = args.theorem or f"moser_{args.d}_3_ge_{res.size}"
     lean_src = density_hj.emit_moser_lower_lean(res, theorem_name=thm)
-    if args.out:
-        out_path = Path(args.out)
-        out_path.write_text(
-            "import HJBrigade\n\nnamespace HJBrigade\n\n" + lean_src + "\nend HJBrigade\n",
-            encoding="utf-8",
-        )
-        print(f"Wrote Moser witness to {out_path}")
-    if args.verify:
-        verifier = RealLeanVerifier(proj, timeout_s=args.lean_timeout)
-        chk = await verifier.check(lean_src)
-        aud = await verifier.axiom_audit(lean_src, thm)
-        print(f"Lean verification: {chk.summary()}")
-        print(f"Axiom audit ({thm}): ok={aud.ok} axioms={aud.axioms} {aud.note}")
-        return 0 if (chk.ok and chk.sorries == 0 and aud.ok) else 1
-    return 0
+    return await _write_and_verify_certificate(
+        proj, lean_src, thm, args.out, args.verify, args.lean_timeout, label="Moser witness"
+    )
 
 
 async def _cmd_blueprint(args: argparse.Namespace) -> int:
@@ -236,7 +227,7 @@ async def _cmd_blueprint(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="hj-brigade", description="Neuro-symbolic Lean 4 Ramsey / Hales-Jewett prover")
+    p = argparse.ArgumentParser(prog="brigade", description="Neuro-symbolic Lean 4 Ramsey / Hales-Jewett prover")
     p.add_argument("--project-dir", default=str(_default_project_dir()), help="Path to HJBrigade Lake project")
     sub = p.add_subparsers(dest="cmd", required=True)
 

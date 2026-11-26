@@ -769,7 +769,26 @@ class Orchestrator:
                 ordered.append(n)
 
         visit(root)
-        return "\n\n".join(self._theorem_text(n, n.lean_proof) for n in ordered)
+        ordered_names = {n.lean_name for n in ordered if n.lean_name}
+        ledger_by_name = {
+            n.lean_name: n
+            for n in self.ledger.get_verified()
+            if n.lean_name and n.lean_name not in ordered_names
+        }
+        needed_names: set[str] = set()
+        frontier = [self._theorem_text(n, n.lean_proof) for n in ordered]
+        while frontier:
+            joined = "\n".join(frontier)
+            frontier = []
+            for name, lnode in ledger_by_name.items():
+                if name in needed_names:
+                    continue
+                if re.search(rf"\b{re.escape(name)}\b", joined):
+                    needed_names.add(name)
+                    frontier.append(self._theorem_text(lnode, lnode.lean_proof))
+        needed = [n for n in ledger_by_name.values() if n.lean_name in needed_names]
+        full_order = needed + ordered
+        return "\n\n".join(self._theorem_text(n, n.lean_proof) for n in full_order)
 
     def _failures(self, prefix: str) -> str:
         stuck = [f"{n.lean_name}: {n.last_errors[:1]}" for n in self.job.nodes.values() if n.status == NodeStatus.STUCK]
