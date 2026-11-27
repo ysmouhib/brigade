@@ -755,6 +755,40 @@ class Orchestrator:
         self.emit("chef", "chef", "exhausted", self.job.summary)
 
     async def _formalize_node(self, node: ProofNode) -> bool:
+        if node.kind == "theorem":
+            raw_cand = _PROVE_PREFIX_RE.sub("", self.job.problem.strip()).rstrip(".")
+            if raw_cand and "\n" not in raw_cand and (
+                any(sym in raw_cand for sym in ("→", "->", "∀", "∃", "∧", "∨", "≤", "<", "=", "¬"))
+                or any(
+                    tok in raw_cand
+                    for tok in (
+                        "HJUpper",
+                        "MHJUpper",
+                        "HasMonoAP",
+                        "HasMonoSchur",
+                        "GraphRamseyUpper",
+                        "MulticolorRamseyUpper",
+                        "IsLineFree",
+                        "IsGeomLineFree",
+                        "wordCard",
+                    )
+                )
+            ):
+                pinned_stmt = f"theorem {node.lean_name} : {raw_cand}"
+                cached = self.ledger.find_matching_statement(pinned_stmt)
+                if cached is not None:
+                    node.lean_statement = pinned_stmt
+                    self._mark_verified(node, cached.lean_proof, f"{node.lean_name} reused from persistent ProofLedger.")
+                    return True
+                gate = await self._check_statement(pinned_stmt, node, context=self._context_code(node.id))
+                if gate.ok:
+                    node.lean_statement = pinned_stmt
+                    if gate.goals:
+                        node.goal = gate.goals[0]
+                    node.status = NodeStatus.STATEMENT_OK
+                    self.emit("chef", "chef", "statement_pinned", f"{node.lean_name} pinned directly from formal problem", node.id)
+                    return True
+
         errors: list[str] = []
         premises = self.index.format_hints(f"{node.informal} {node.sketch}", limit=10)
         for _ in range(self.cfg.statement_retries):

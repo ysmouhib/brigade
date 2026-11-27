@@ -25,6 +25,13 @@ def CombSubspace.eval {m d k : Nat} (S : CombSubspace m d k) (w : Word m k) : Wo
     | Sum.inl a => a
     | Sum.inr j => w j
 
+theorem CombSubspace.eval_injective {m d k : Nat} (S : CombSubspace m d k)
+    {w₁ w₂ : Word m k} (h : S.eval w₁ = S.eval w₂) : w₁ = w₂ := by
+  funext j
+  obtain ⟨i, hi⟩ := S.surj j
+  have hpt := congrFun h i
+  simpa [CombSubspace.eval, hi] using hpt
+
 def CombSubspace.pushLine {m d k : Nat} (S : CombSubspace m d k) (L : Line m k) : Line d k where
   mask := fun i => match S.coord i with
     | Sum.inl a => some a

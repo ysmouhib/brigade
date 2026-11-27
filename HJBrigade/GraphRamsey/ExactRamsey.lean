@@ -47,8 +47,13 @@ theorem ramsey_3_3_upper : GraphRamseyUpper 6 3 3 :=
     (by decide) (by decide)
 
 def ramsey33Witness (u v : Fin 5) : Bool :=
-  let d := (v.val + 5 - u.val) % 5
-  !(d == 1 || d == 4)
+  if u = v then false
+  else
+    let d := (v.val + 5 - u.val) % 5
+    !(d == 1 || d == 4)
+
+theorem ramsey33Witness_simple : IsSimpleGraph ramsey33Witness := by
+  constructor <;> decide
 
 theorem ramsey_3_3_lower : ¬ GraphRamseyUpper 5 3 3 :=
   checkNoClique_sound ramsey33Witness (by decide) (by decide)
@@ -68,8 +73,13 @@ theorem ramsey_3_4_upper : GraphRamseyUpper 9 3 4 :=
     (by decide) (by decide) (by decide) (by decide)
 
 def ramsey34Witness (u v : Fin 8) : Bool :=
-  let d := (v.val + 8 - u.val) % 8
-  !(d == 1 || d == 4 || d == 7)
+  if u = v then false
+  else
+    let d := (v.val + 8 - u.val) % 8
+    !(d == 1 || d == 4 || d == 7)
+
+theorem ramsey34Witness_simple : IsSimpleGraph ramsey34Witness := by
+  constructor <;> decide
 
 theorem ramsey_3_4_lower : ¬ GraphRamseyUpper 8 3 4 :=
   checkNoClique_sound ramsey34Witness (by decide) (by decide)
@@ -78,7 +88,7 @@ theorem ramsey_3_4_exact : GraphRamseyUpper 9 3 4 ∧ ¬ GraphRamseyUpper 8 3 4 
   ⟨ramsey_3_4_upper, ramsey_3_4_lower⟩
 
 -- ============================================================================
--- R(3, 5) = 14 (Erdős–Szekeres Step + Z/13Z Cubic-like Circulant Witness)
+-- R(3, 5) = 14 (Erdős–Szekeres Step + Cubic-Residue Cayley Witness ({1, 5, 8, 12} = (F_13^×)^3))
 -- ============================================================================
 
 theorem ramsey_3_5_upper : GraphRamseyUpper 14 3 5 :=
@@ -86,8 +96,13 @@ theorem ramsey_3_5_upper : GraphRamseyUpper 14 3 5 :=
     (by decide) (by decide)
 
 def ramsey35Witness (u v : Fin 13) : Bool :=
-  let d := (v.val + 13 - u.val) % 13
-  !(d == 1 || d == 5 || d == 8 || d == 12)
+  if u = v then false
+  else
+    let d := (v.val + 13 - u.val) % 13
+    !(d == 1 || d == 5 || d == 8 || d == 12)
+
+theorem ramsey35Witness_simple : IsSimpleGraph ramsey35Witness := by
+  constructor <;> decide
 
 theorem ramsey_3_5_lower : ¬ GraphRamseyUpper 13 3 5 :=
   checkNoClique_sound ramsey35Witness (by decide) (by decide)
@@ -103,8 +118,13 @@ theorem ramsey_4_4_upper : GraphRamseyUpper 18 4 4 :=
   erdos_szekeres_step (M1 := 9) (M2 := 9) ramsey_3_4_upper ramsey_3_4_upper.symm (by decide) (by decide)
 
 def ramsey44Witness (u v : Fin 17) : Bool :=
-  let d := (v.val + 17 - u.val) % 17
-  !(d == 1 || d == 2 || d == 4 || d == 8 || d == 9 || d == 13 || d == 15 || d == 16)
+  if u = v then false
+  else
+    let d := (v.val + 17 - u.val) % 17
+    !(d == 1 || d == 2 || d == 4 || d == 8 || d == 9 || d == 13 || d == 15 || d == 16)
+
+theorem ramsey44Witness_simple : IsSimpleGraph ramsey44Witness := by
+  constructor <;> decide
 
 theorem ramsey_4_4_lower : ¬ GraphRamseyUpper 17 4 4 :=
   checkNoClique_sound ramsey44Witness (by decide) (by decide)
@@ -145,6 +165,9 @@ private def gf16LogMod3 : Nat → Fin 3
 
 def ramsey333Witness (u v : Fin 16) : Fin 3 :=
   gf16LogMod3 (xor4 u.val v.val)
+
+theorem ramsey333Witness_symm : ∀ u v : Fin 16, ramsey333Witness u v = ramsey333Witness v u := by
+  decide
 
 theorem ramsey_3_3_3_lower : ¬ MulticolorRamseyUpper 16 3 3 :=
   checkNoMonoClique_sound ramsey333Witness (by decide)

@@ -665,10 +665,12 @@ def solve_graph_ramsey(
     seed: int = 42,
 ) -> HyperSolveResult:
     """Search for a clique-avoiding edge coloring on `n` vertices for `R(s, t)` or `R_r(s)`."""
-    if t is not None and r == 2:
-        targets = [s, t]
-        params: dict[str, Any] = {"N": n, "s": s, "t": t, "r": 2}
+    if r == 2:
+        eff_t = t if t is not None else s
+        targets = [s, eff_t]
+        params: dict[str, Any] = {"N": n, "s": s, "t": eff_t, "r": 2}
     else:
+        eff_t = s
         targets = [s] * r
         params = {"N": n, "r": r, "k": s}
 
@@ -694,13 +696,13 @@ def solve_graph_ramsey(
             pair_idx[(u, v)] = len(pairs_list)
             pairs_list.append((u, v))
 
-    if r == 2 and s != t:
+    if r == 2 and s != eff_t:
         # Asymmetric clique constraints: encode directly in random local search on edges
         rng = random.Random(seed)
         from itertools import combinations
 
         cliques_0 = [tuple(pair_idx[a] for a in combinations(verts, 2)) for verts in combinations(range(n), s)]
-        cliques_1 = [tuple(pair_idx[a] for a in combinations(verts, 2)) for verts in combinations(range(n), t or s)]
+        cliques_1 = [tuple(pair_idx[a] for a in combinations(verts, 2)) for verts in combinations(range(n), eff_t)]
         m = len(pairs_list)
         if m > 0:
             e_to_0: list[list[int]] = [[] for _ in range(m)]

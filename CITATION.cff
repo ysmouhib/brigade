@@ -1,5 +1,6 @@
 cff-version: 1.2.0
-title: "Brigade: Lean 4 Formalization and Kernel-Checked Combinatorial Prover for Hales–Jewett and Ramsey Theory"
+title: "Brigade: Lean 4 Formalization and Kernel-Checked Combinatorial Prover for Ramsey Theory"
+version: "0.2.0"
 message: "If you use this Lean 4 library, certificates, or solver tools in your research, please cite this repository."
 authors:
   - family-names: "Mouhib"
@@ -12,5 +13,8 @@ keywords:
   - hales-jewett-theorem
   - density-hales-jewett
   - van-der-waerden-theorem
+  - schur-theorem
+  - graph-ramsey-theory
+  - hypergraph-coloring
   - formal-verification
   - neuro-symbolic

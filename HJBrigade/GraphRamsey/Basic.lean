@@ -7,7 +7,7 @@ Formalizes finite 2-color and `r`-color graph Ramsey numbers cleanly in standalo
 - `GraphRamseyUpper N s t`, `MulticolorRamseyUpper N r k`
 - `erdos_szekeres_step`, `erdos_szekeres`, and unconditional `graph_ramsey`
 - `handshaking_even` & Greenwood–Gleason parity tightening `erdos_szekeres_even`
-- `ramsey_triangle_step` (`R_{r+1}(3) ≤ r * (R_r(3) - 1) + 2`) & unconditional `multicolor_triangle_ramsey`
+- `ramsey_triangle_step` (`R_{r+1}(3) ≤ (r + 1) * (R_r(3) - 1) + 2`) & unconditional `multicolor_triangle_ramsey`
 - Fast branch-and-pruning clique-absence checkers `checkNoClique_sound` and `checkNoMonoClique_sound`
 -/
 
@@ -281,6 +281,59 @@ private theorem isBoolClique_symGraph_iff {N s : Nat} (G : Fin N → Fin N → B
     refine ⟨hf, fun i j hij => ?_⟩
     have hval := hf i j hij
     simpa [symGraph, hval] using hfc i j hij
+
+/-- `G` is a loopless symmetric (undirected simple) graph on `Fin N`. -/
+def IsSimpleGraph {N : Nat} (G : Fin N → Fin N → Bool) : Prop :=
+  (∀ u : Fin N, G u u = false) ∧ (∀ u v : Fin N, G u v = G v u)
+
+theorem symGraph_isSimple {N : Nat} (G : Fin N → Fin N → Bool) :
+    IsSimpleGraph (symGraph G) :=
+  ⟨fun u => by simp [symGraph], symGraph_comm G⟩
+
+/-- `GraphRamseyUpper N s t` is logically equivalent to the statement restricted to
+loopless symmetric undirected simple graphs (so neither upper nor lower bounds depend on
+diagonal or lower-triangular entries). -/
+theorem graphRamseyUpper_iff_simple (N s t : Nat) :
+    GraphRamseyUpper N s t ↔
+      ∀ G : Fin N → Fin N → Bool, IsSimpleGraph G →
+        (∃ f : Fin s → Fin N, IsBoolClique G false f) ∨
+        (∃ g : Fin t → Fin N, IsBoolClique G true g) := by
+  constructor
+  · intro h G _
+    exact h G
+  · intro h G
+    rcases h (symGraph G) (symGraph_isSimple G) with ⟨f, hf⟩ | ⟨g, hg⟩
+    · exact Or.inl ⟨f, (isBoolClique_symGraph_iff G false f).mp hf⟩
+    · exact Or.inr ⟨g, (isBoolClique_symGraph_iff G true g).mp hg⟩
+
+/-- Upper-triangle symmetrization of an `r`-edge-coloring. -/
+def symEdgeColoring {N r : Nat} (hr : r ≥ 1) (c : Fin N → Fin N → Fin r) (u v : Fin N) : Fin r :=
+  if u.val < v.val then c u v else if v.val < u.val then c v u else ⟨0, hr⟩
+
+theorem symEdgeColoring_comm {N r : Nat} (hr : r ≥ 1) (c : Fin N → Fin N → Fin r) (u v : Fin N) :
+    symEdgeColoring hr c u v = symEdgeColoring hr c v u := by
+  dsimp only [symEdgeColoring]
+  rcases Nat.lt_trichotomy u.val v.val with h | h | h
+  · have hnot : ¬ (v.val < u.val) := by omega
+    simp [h, hnot]
+  · simp [h]
+  · have hnot : ¬ (u.val < v.val) := by omega
+    simp [h, hnot]
+
+/-- `MulticolorRamseyUpper N r k` is logically equivalent to the statement restricted to
+symmetric edge-colorings (`c u v = c v u`). -/
+theorem multicolorRamseyUpper_iff_symm (N r k : Nat) (hr : r ≥ 1) :
+    MulticolorRamseyUpper N r k ↔
+      ∀ c : Fin N → Fin N → Fin r, (∀ u v : Fin N, c u v = c v u) →
+        ∃ (col : Fin r) (f : Fin k → Fin N), IsMonoClique c col f := by
+  constructor
+  · intro h c _
+    exact h c
+  · intro h c
+    obtain ⟨col, f, hfMono, hfC⟩ := h (symEdgeColoring hr c) (symEdgeColoring_comm hr c)
+    refine ⟨col, f, hfMono, fun i j hij => ?_⟩
+    have hlt := hfMono i j hij
+    simpa [symEdgeColoring, hlt] using hfC i j hij
 
 private theorem clique_extend_with_hub {N s : Nat} (G : Fin N → Fin N → Bool) (col : Bool)
     (u0 : Fin N) (f : Fin s → Fin N) (hf : IsBoolClique G col f)

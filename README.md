@@ -6,7 +6,7 @@
 
 `brigade` is an Antigravity-native, self-contained **Lean 4.35.0** formalization library (`HJBrigade`), combinatorial certificate compiler, parameter-sweep explorer, and neuro-symbolic proving workbench for **Ramsey Theory** — spanning **Hales–Jewett**, **Multidimensional Hales–Jewett**, **Van der Waerden**, **Schur's Theorem**, **Graph & Multicolor Ramsey Numbers**, **Density Hales–Jewett (`DHJ`)**, and **Moser Numbers** over $[3]^d$.
 
-It features **173 kernel-verified Lean 4 theorems across 19 modules** (zero Mathlib dependency, zero `sorry`, zero `native_decide`), a parameterizable DPLL reflection checker (`HyperCert`), an interactive discovery log (`research/DISCOVERIES.md`), Antigravity workspace skills (`.agents/skills/`), and a zero-dependency **stdio MCP server** (`python -m brigade mcp`).
+It features **183 kernel-verified Lean 4 theorems across 19 modules** (zero Mathlib dependency, zero `sorry`, zero `native_decide`), a parameterizable DPLL reflection checker (`HyperCert`), an interactive discovery log (`research/DISCOVERIES.md`), Antigravity workspace skills (`.agents/skills/`), and a zero-dependency **stdio MCP server** (`python -m brigade mcp`).
 
 ---
 
@@ -19,10 +19,10 @@ Every exported theorem passes static linting (`I4`) and `#print axioms` (`I2`), 
 | `hales_jewett_shelah`, `hales_jewett` ([Shelah.lean](HJBrigade/Theorems/Shelah.lean)) | `∀ k r ≥ 1, HJUpper (shelahHJDim k r) k r` | Shelah's 1988 Cube / Equal-Ends induction (`shelah_equal_ends`) |
 | `multidimensional_hales_jewett` ([MultidimensionalHJ.lean](HJBrigade/Theorems/MultidimensionalHJ.lean)) | `∀ m k r ≥ 1, ∃ D ≥ 1, MHJUpper m D k r` | Product subspace induction (`mhj_shelah`) via `encodeMap` |
 | `van_der_waerden` ([Shelah.lean](HJBrigade/Theorems/Shelah.lean)) | `∀ k r ≥ 1, ∃ N ≥ 1, HasMonoAP N k r` | Coordinate-sum projection `hj_implies_vdw` ([VanDerWaerden.lean](HJBrigade/Reductions/VanDerWaerden.lean)) |
-| `erdos_szekeres`, `graph_ramsey`, `erdos_szekeres_even` ([GraphRamsey/Basic.lean](HJBrigade/GraphRamsey/Basic.lean)) | `GraphRamseyUpper (erdosSzekeresBound s t) s t` + Greenwood–Gleason parity tightening | Pivot neighbor induction + `handshaking_even` (`% 2`) |
-| `multicolor_triangle_ramsey` ([GraphRamsey/Basic.lean](HJBrigade/GraphRamsey/Basic.lean)) | `∀ r ≥ 1, ∃ N ≥ 1, MulticolorRamseyUpper N r 3` | Pigeonhole star + color drop `ramsey_triangle_step` |
-| `ramsey_3_3_exact` .. `ramsey_4_4_exact`, `ramsey_3_3_3_exact` ([ExactRamsey.lean](HJBrigade/GraphRamsey/ExactRamsey.lean)) | $R(3,3)=6,\; R(3,4)=9,\; R(3,5)=14,\; R(4,4)=18,\; R(3,3,3)=17$ | Greenwood–Gleason + $C_5$, $\mathbb{Z}_8$, $\mathbb{Z}_{13}$, Paley $P_{17}$, $\mathrm{GF}(16)$ witnesses |
-| `schur_theorem`, `schur_1_exact`, `schur_2_exact`, `schur_3_exact` ([Schur.lean](HJBrigade/Reductions/Schur.lean), [ExactBounds.lean](HJBrigade/Theorems/ExactBounds.lean)) | $\forall r \ge 1,\; \exists n \ge 1, \text{HasMonoSchur}\; n\; r$; exact $S(1)=2,\; S(2)=5,\; S(3)=14$ | Difference coloring reduction (`multicolor_ramsey_implies_schur`) + `HyperCert` |
+| `erdos_szekeres`, `graph_ramsey`, `erdos_szekeres_even` ([GraphRamsey/Basic.lean](HJBrigade/GraphRamsey/Basic.lean)) | `GraphRamseyUpper (erdosSzekeresBound s t) s t`, `graphRamseyUpper_iff_simple`, Greenwood–Gleason parity tightening | Pivot neighbor induction + `handshaking_even` (`% 2`) + simple-graph equivalence |
+| `multicolor_triangle_ramsey` ([GraphRamsey/Basic.lean](HJBrigade/GraphRamsey/Basic.lean)) | `∀ r ≥ 1, ∃ N ≥ 1, MulticolorRamseyUpper N r 3` & `multicolorRamseyUpper_iff_symm` | Pigeonhole star + color drop `ramsey_triangle_step` |
+| `ramsey_3_3_exact` .. `ramsey_4_4_exact`, `ramsey_3_3_3_exact` ([ExactRamsey.lean](HJBrigade/GraphRamsey/ExactRamsey.lean)) | $R(3,3)=6,\; R(3,4)=9,\; R(3,5)=14,\; R(4,4)=18,\; R(3,3,3)=17$ (with verified `IsSimpleGraph` / symmetric witnesses) | Greenwood–Gleason + $C_5$, $\mathbb{Z}_8$, cubic $\mathbb{F}_{13}^\times$, Paley $P_{17}$, $\mathrm{GF}(16)$ witnesses |
+| `schur_theorem`, `schur_1_exact`, `schur_2_exact`, `schur_3_exact` ([Schur.lean](HJBrigade/Reductions/Schur.lean), [ExactBounds.lean](HJBrigade/Theorems/ExactBounds.lean)) | $\forall r \ge 1,\; \exists n \ge 1, \text{HasMonoSchur}\; n\; r$; exact thresholds $n=2, 5, 14$ ($S(1)=1, S(2)=4, S(3)=13$, OEIS A030126) | Difference coloring reduction (`multicolor_ramsey_implies_schur`) + `HyperCert` |
 | `vdw_3_2_exact`, `vdw_4_2_exact`, `vdw_3_3_gt_26` ([ExactBounds.lean](HJBrigade/Theorems/ExactBounds.lean)) | $W(3,2)=9,\; W(4,2)=35,\; W(3,3)>26$ | 1,423-node `HyperCert` (`checkVdWCertSym_sound`) + AP-free colorings |
 | `hj_two_exact`, `hj_3_2_exact`, `hj_4_2_gt_4`, `hj_3_3_gt_4` ([BaseAndAlphabetTwo.lean](HJBrigade/Theorems/BaseAndAlphabetTwo.lean), [ExactBounds.lean](HJBrigade/Theorems/ExactBounds.lean)) | $HJ(2,r)=r$, $HJ(3,2)=4$, $HJ(4,2)>4$, $HJ(3,3)>4$ | Pigeonhole on step words + 441-node `CertTree` (`checkCertSym_sound`) |
 | `dhj_two_exact` / `sperner_dhj_two` ([Sperner.lean](HJBrigade/Density/Sperner.lean)) | $c_{d, 2} = \binom{d}{\lfloor d/2 \rfloor}$ for all $d$ | Constructive Greene–Kleitman Symmetric Chain Decomposition |
@@ -42,14 +42,14 @@ Point Antigravity's MCP configuration at `brigade` (template in [mcp_config.exam
   "mcpServers": {
     "brigade": {
       "command": "python",
-      "args": ["-m", "brigade", "--project-dir", "C:/Users/youne/.gemini/antigravity/scratch/hj-brigade", "mcp"]
+      "args": ["-m", "brigade", "--project-dir", "/absolute/path/to/brigade", "mcp"]
     }
   }
 }
 ```
 
 Exposed MCP tools:
-- `brigade_search_premises` — search all 173 compiled `HJBrigade` theorems & definitions
+- `brigade_search_premises` — search all 183 compiled `HJBrigade` theorems & definitions
 - `brigade_blueprint` — extract elaborated `⊢` goal states for every `sorry`, matching lemmas, and axioms
 - `brigade_verify_snippet` — run `I4` lint + real Lean 4 compile + `#print axioms`
 - `brigade_certify` — solve & emit kernel-checked witnesses/trees for `hj`, `vdw`, `schur`, `ramsey`, `dhj`, `moser`
@@ -116,8 +116,8 @@ python scripts/run_cli.py prove "Prove GraphRamseyUpper 9 3 4"
 1. **I1 (Verifier Gate)**: A proof node enters `VERIFIED` *only* after `RealLeanVerifier.check()` succeeds with `ok=True` and `sorries=0` on code containing its pinned statement.
 2. **I2 (Whole-File Re-Check & Axiom Audit)**: Acceptance requires full compilation plus `#print axioms` confirming all dependencies lie inside `{propext, Classical.choice, Quot.sound}`.
 3. **I3 (Statement Pinning)**: Statements lock after `trace_state; sorry` elaboration in `check_statement`; provers can only emit tactic bodies after `:= by`.
-4. **I4 (Static Linter)**: Proof bodies are rejected pre-Lean if they contain `sorry`, `admit`, `axiom`, `native_decide`, `sorryAx`, `unsafe`, `opaque`, `partial`, `@[implemented_by`, `Lean.ofReduceBool`, or `Lean.trustCompiler` (ignoring `--` and nested `/- ... -/` comments).
+4. **I4 (Static Linter)**: Proof bodies are rejected pre-Lean if they contain `sorry`, `admit`, `axiom`, `native_decide`, `sorryAx`, `unsafe`, `opaque`, `partial`, `@[implemented_by`, `@[extern`, `@[csimp`, `Lean.ofReduceBool`, or `Lean.trustCompiler` (ignoring `--`, nested `/- ... -/` comments, and character literals like `'"'`).
 
-## Further Research & Citation
+## Contributing & Further Research
 
-See [docs/RESEARCH_ROADMAP.md](docs/RESEARCH_ROADMAP.md) and [research/DISCOVERIES.md](research/DISCOVERIES.md) for current open frontiers ($W(3,3)\le 27$, $S(4)\le 45$, $R(4,5)=25$, $c'_{4,3}=43$, $c_{5,3}=150$, $HJ(3,3)$ and $HJ(4,2)$ upper bounds, asymptotic `DHJ(3)`). Citation metadata is provided in [CITATION.cff](CITATION.cff).
+See [CONTRIBUTING.md](CONTRIBUTING.md), [docs/RESEARCH_ROADMAP.md](docs/RESEARCH_ROADMAP.md), and [research/DISCOVERIES.md](research/DISCOVERIES.md) for contributor guidelines and current open frontiers ($W(3,3)\le 27$, $\mathrm{HasMonoSchur}\; 45\; 4$ / $S(4)=44$, $R(4,5)=25$, $c'_{4,3}=43$, $c_{5,3}=150$, $HJ(3,3)$ and $HJ(4,2)$ upper bounds, asymptotic `DHJ(3)`). Citation metadata is provided in [CITATION.cff](CITATION.cff).

@@ -9,7 +9,12 @@ Formalizes Schur's theorem on monochromatic solutions to `x + y = z` in `{1, …
 - Constructive proof `multicolor_ramsey_implies_schur` from `MulticolorRamseyUpper N r 3`
 - Unconditional `schur_theorem` for every `r ≥ 1`
 - Parameterized `HyperCert` reflection checker `checkSchurCertSym_sound`
-- Exact small Schur bounds `S(1) = 2` and `S(2) = 5`
+- Exact small Schur bounds `schur_1_exact` (`n = 2`) and `schur_2_exact` (`n = 5`)
+
+Convention note: `HasMonoSchur n r` uses the Ramsey-threshold convention (least `n`
+forcing a monochromatic solution `x + y = z` in `{1, …, n}`: `2, 5, 14`), which equals
+`S(r) + 1` where `S(1) = 1, S(2) = 4, S(3) = 13` denotes the maximal sum-free interval
+length (`OEIS A030126`).
 -/
 
 namespace HJBrigade

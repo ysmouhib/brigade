@@ -26,6 +26,8 @@ FORBIDDEN_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("opaque", re.compile(r"\bopaque\b")),
     ("partial", re.compile(r"\bpartial\b")),
     ("@[implemented_by", re.compile(r"@\[implemented_by\b")),
+    ("@[extern", re.compile(r"@\[extern\b")),
+    ("@[csimp", re.compile(r"@\[csimp\b")),
     ("Lean.ofReduceBool", re.compile(r"\bLean\.ofReduceBool\b")),
     ("Lean.trustCompiler", re.compile(r"\bLean\.trustCompiler\b")),
 ]
@@ -81,7 +83,10 @@ def strip_lean_comments(text: str) -> str:
             else:
                 i += 1
         else:
-            if ch == '"':
+            if ch == '"' and not (
+                (i > 0 and text[i - 1] == "'" and i + 1 < n and text[i + 1] == "'")
+                or (i >= 2 and text[i - 2 : i] == "'\\" and i + 1 < n and text[i + 1] == "'")
+            ):
                 in_string = True
                 out.append(ch)
                 i += 1

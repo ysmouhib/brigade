@@ -72,6 +72,37 @@ class TestRamseySchurAndWorkbench(unittest.IsolatedAsyncioTestCase):
         aud_v = await self.verifier.axiom_audit(lean_vdw, "test_vdw_3_2_le_9")
         self.assertTrue(aud_v.ok, aud_v.note)
 
+        # Diagonal solve_graph_ramsey(5, 3) with t=None, r=2 emits ¬ GraphRamseyUpper 5 3 3
+        ram33 = hypergraph.solve_graph_ramsey(5, 3)
+        self.assertEqual(ram33.status, "SAT_FREE")
+        self.assertEqual(ram33.params.get("t"), 3)
+        lean_r33 = hypergraph.emit_graph_ramsey_lower_lean(ram33, theorem_name="test_r_3_3_gt_5")
+        self.assertIn("¬ GraphRamseyUpper 5 3 3", lean_r33)
+        chk_r33 = await self.verifier.check(lean_r33)
+        self.assertTrue(chk_r33.ok and chk_r33.sorries == 0, chk_r33.errors)
+        aud_r33 = await self.verifier.axiom_audit(lean_r33, "test_r_3_3_gt_5")
+        self.assertTrue(aud_r33.ok, aud_r33.note)
+
+        # Check new foundation equivalence theorems directly against precompiled library
+        equiv_code = (
+            "theorem test_foundations_check :\n"
+            "    IsSimpleGraph ramsey44Witness ∧ (∀ u v : Fin 16, ramsey333Witness u v = ramsey333Witness v u) := by\n"
+            "  exact ⟨ramsey44Witness_simple, ramsey333Witness_symm⟩\n"
+            "theorem test_simple_iff (N s t : Nat) :\n"
+            "    GraphRamseyUpper N s t ↔ ∀ G : Fin N → Fin N → Bool, IsSimpleGraph G →\n"
+            "      (∃ f : Fin s → Fin N, IsBoolClique G false f) ∨ (∃ g : Fin t → Fin N, IsBoolClique G true g) := by\n"
+            "  exact graphRamseyUpper_iff_simple N s t\n"
+            "theorem test_mram_iff (N r k : Nat) (hr : r ≥ 1) :\n"
+            "    MulticolorRamseyUpper N r k ↔ ∀ c : Fin N → Fin N → Fin r, (∀ u v : Fin N, c u v = c v u) →\n"
+            "      ∃ (col : Fin r) (f : Fin k → Fin N), IsMonoClique c col f := by\n"
+            "  exact multicolorRamseyUpper_iff_symm N r k hr\n"
+            "theorem test_sub_inj {m d k : Nat} (S : CombSubspace m d k) {w₁ w₂ : Word m k}\n"
+            "    (h : S.eval w₁ = S.eval w₂) : w₁ = w₂ :=\n"
+            "  S.eval_injective h"
+        )
+        chk_eq = await self.verifier.check(equiv_code)
+        self.assertTrue(chk_eq.ok and chk_eq.sorries == 0, chk_eq.errors)
+
     def test_explorer_sweeps_and_research_lab_persistence(self) -> None:
         schur_rows = explorer.explore_family("schur", r=2, start=3, stop=5)
         self.assertEqual([r["status"] for r in schur_rows], ["SAT_FREE", "SAT_FREE", "UNSAT_MONO"])

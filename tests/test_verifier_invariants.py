@@ -26,7 +26,10 @@ class TestVerifierInvariants(unittest.IsolatedAsyncioTestCase):
             "opaque y : Nat",
             "partial def z := z",
             "@[implemented_by foo]",
+            "@[extern \"c_fn\"]",
+            "@[csimp]",
             "exact Lean.ofReduceBool true",
+            "let q := '\"'\nsorry",
         ]:
             hits = lint_proof(bad)
             self.assertTrue(hits, f"Expected I4 lint rejection for: {bad}")

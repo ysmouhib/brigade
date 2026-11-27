@@ -5,7 +5,7 @@
 ## Completed Milestones
 1. **Unconditional Hales–Jewett, Multidimensional HJ & Van der Waerden** (`hales_jewett_shelah`, `multidimensional_hales_jewett`, `van_der_waerden`).
 2. **Graph & Multicolor Ramsey Theory** (`graph_ramsey`, `erdos_szekeres`, Greenwood–Gleason `erdos_szekeres_even`, `multicolor_triangle_ramsey`, plus exact `ramsey_3_3_exact`, `ramsey_3_4_exact`, `ramsey_3_5_exact`, `ramsey_4_4_exact`, `ramsey_3_3_3_exact`).
-3. **Schur's Theorem & Exact Schur Numbers** (`multicolor_ramsey_implies_schur`, unconditional `schur_theorem`, and exact `schur_1_exact`, `schur_2_exact`, `schur_3_exact`).
+3. **Schur's Theorem & Exact Schur Bounds** (`multicolor_ramsey_implies_schur`, unconditional `schur_theorem`, and exact `schur_1_exact`, `schur_2_exact`, `schur_3_exact`: Ramsey threshold $n = 2, 5, 14$, matching maximal sum-free bounds $S(1)=1, S(2)=4, S(3)=13$, OEIS A030126).
 4. **Parameterizable Hypergraph Reflection & Van der Waerden Bounds** (`HyperCert`, `checkHyperCertSym_sound`, `checkVdWCertSym_sound`, `vdw_3_2_exact`, `vdw_4_2_exact` with $W(4,2)=35$, and `vdw_3_3_gt_26`).
 5. **Exact Binary Density `DHJ(2)`** (`sperner_dhj_two`, `dhj_two_exact`: $c_{d, 2} = \binom{d}{\lfloor d/2 \rfloor}$ via Greene–Kleitman symmetric chain decomposition).
 6. **Closed Polymath-1 Ternary Values $c_{1,3} .. c_{4,3}$ & Moser Numbers $c'_{1,3} .. c'_{4,3}$**:
@@ -17,9 +17,9 @@
 
 ## Next Open Formalization Targets
 
-### 1. Van der Waerden $W(3, 3) = 27$ & Schur $S(4) = 45$
-- **Current status**: `vdw_3_3_gt_26` ($W(3, 3) > 26$) and `schur_3_exact` ($S(3) = 14$) are kernel-verified in `ExactBounds.lean`.
-- **Next step**: Partition $W(3,3) \le 27$ and $S(4) \le 45$ into modular sub-certificates (sharding top-level `HyperCert` branches into separate Lean definitions so elaboration stays shallow) and combine with a 44-element sum-free 4-coloring witness for $S(4) > 44$.
+### 1. Van der Waerden $W(3, 3) = 27$ & Schur Threshold $n = 45$ ($S(4) = 44$)
+- **Current status**: `vdw_3_3_gt_26` ($W(3, 3) > 26$) and `schur_3_exact` ($\neg\mathrm{HasMonoSchur}\; 13\; 3 \wedge \mathrm{HasMonoSchur}\; 14\; 3$, $S(3) = 13$) are kernel-verified in `ExactBounds.lean`.
+- **Next step**: Partition $W(3,3) \le 27$ and $\mathrm{HasMonoSchur}\; 45\; 4$ into modular sub-certificates (sharding top-level `HyperCert` branches into separate Lean definitions so elaboration stays shallow) and pair with a 44-element sum-free 4-coloring witness for $S(4) \ge 44$ (not `45`, note OEIS A030126 has `S(4) = 44` sum-free -> `n = 45` forcing).
 
 ### 2. Two-Color Graph Ramsey $R(4, 5) = 25$ & $R(3, 6) = 18$
 - **Current status**: $R(3,3)=6$, $R(3,4)=9$, $R(3,5)=14$, $R(4,4)=18$, $R(3,3,3)=17$ are closed.
