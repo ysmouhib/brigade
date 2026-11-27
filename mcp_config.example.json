@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "brigade": {
+      "command": "python",
+      "args": [
+        "-m",
+        "brigade",
+        "--project-dir",
+        "C:/Users/youne/.gemini/antigravity/scratch/hj-brigade",
+        "mcp"
+      ]
+    }
+  }
+}

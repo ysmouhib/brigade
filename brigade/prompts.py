@@ -16,7 +16,11 @@ Lean 4.35 + HJBrigade library conventions (standalone Lean 4, no Mathlib unless 
   * `fujimuraSet`, `fujimura_isLineFree`, `fujimura_lower_bound`, `c_5_3_ge_150`, `c_6_3_ge_450`
   * `GeomLine`, `IsGeomLineFree`, `moser_1_3_exact`, `moser_2_3_exact`, `moser_3_3_exact`, `moser_3_3_strict_gap`, `moser_4_3_upper_48`, `moser_4_3_ge_43`
   * `HasMonoAP`, `HasMonoAPFor`, `hasMonoAP_iff_for`, `wordSum`, `hj_implies_vdw`, `not_vdw_implies_not_hj`, `van_der_waerden`
-  * `CertTree`, `checkCert_sound`, `checkCertSym2_sound`, `checkCertSym_sound`, `hj_3_2_exact`, `hj_4_2_gt_4`, `hj_3_3_gt_4`, `vdw_3_2_exact`
+  * `HasMonoSchur`, `HasMonoSchurFor`, `hasMonoSchur_iff_for`, `multicolor_ramsey_implies_schur`, `schur_theorem`, `schur_1_exact`, `schur_2_exact`, `schur_3_exact`
+  * `GraphRamseyUpper`, `MulticolorRamseyUpper`, `erdos_szekeres_step`, `erdos_szekeres`, `graph_ramsey`, `erdos_szekeres_even`, `ramsey_triangle_step`, `multicolor_triangle_ramsey`
+  * `ramsey_3_3_exact`, `ramsey_3_4_exact`, `ramsey_3_5_exact`, `ramsey_4_4_exact`, `ramsey_3_3_3_exact`, `checkNoClique_sound`, `checkNoMonoClique_sound`
+  * `CertTree`, `checkCert_sound`, `checkCertSym_sound`, `HyperCert`, `checkHyperCertSym_sound`, `checkVdWCertSym_sound`, `checkSchurCertSym_sound`
+  * `hj_3_2_exact`, `vdw_3_2_exact`, `vdw_4_2_exact`, `vdw_3_3_gt_26`, `hj_4_2_gt_4`, `hj_3_3_gt_4`
 - Syntax: `theorem name (x : T) : P := by ...`. Use unicode (`ℕ` or `Nat`, `∀ ∃ → ≤ ∧ ∨ ¬`).
 - FORBIDDEN everywhere: `sorry`, `admit`, `axiom`, `native_decide`, `unsafe`, `opaque`, `partial`.
 - Kernel-checked `decide` IS allowed for finite decidable goals.

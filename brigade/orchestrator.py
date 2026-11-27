@@ -9,7 +9,7 @@ import re
 import textwrap
 import traceback
 
-from . import agents, skeptic_hj
+from . import agents, hypergraph, skeptic_hj
 from .lean_verifier import RealLeanVerifier, lint_proof
 from .library_index import PremiseIndex, ProofLedger
 from .llm import LLM, LLMError
@@ -22,6 +22,18 @@ _HJ_PATTERN_RE = re.compile(
 )
 _VDW_PATTERN_RE = re.compile(
     r"(?:(¬|not)\s*)?HasMonoAP\s+(\d+)\s+(\d+)\s+(\d+)",
+    re.IGNORECASE,
+)
+_SCHUR_PATTERN_RE = re.compile(
+    r"(?:(¬|not)\s*)?HasMonoSchur\s+(\d+)\s+(\d+)",
+    re.IGNORECASE,
+)
+_RAMSEY_PATTERN_RE = re.compile(
+    r"(?:(¬|not)\s*)?GraphRamseyUpper\s+(\d+)\s+(\d+)\s+(\d+)",
+    re.IGNORECASE,
+)
+_MRAMSEY_PATTERN_RE = re.compile(
+    r"(?:(¬|not)\s*)?MulticolorRamseyUpper\s+(\d+)\s+(\d+)\s+(\d+)",
     re.IGNORECASE,
 )
 _PROVE_PREFIX_RE = re.compile(r"^(?:prove(?:\s+that)?|show(?:\s+that)?)\s+", re.IGNORECASE)
@@ -195,7 +207,7 @@ class Orchestrator:
         self.emit("chef", "chef", "verified", msg, node.id)
 
     async def _try_symbolic_fastpath(self) -> bool:
-        """Try closing direct formal claims (`HJUpper`, `MHJUpper`, `HasMonoAP`, `IsLineFree`) via cascades."""
+        """Try closing direct formal claims (`HJUpper`, `MHJUpper`, `HasMonoAP`, `GraphRamseyUpper`, `HasMonoSchur`, `IsLineFree`)."""
         candidate = _PROVE_PREFIX_RE.sub("", self.job.problem.strip()).rstrip(".")
         if not any(
             tok in candidate
@@ -203,6 +215,10 @@ class Orchestrator:
                 "HJUpper",
                 "MHJUpper",
                 "HasMonoAP",
+                "HasMonoSchur",
+                "GraphRamseyUpper",
+                "MulticolorRamseyUpper",
+                "erdosSzekeresBound",
                 "shelahHJDim",
                 "mhjDim",
                 "IsGeomLineFree",
@@ -216,7 +232,44 @@ class Orchestrator:
         gate = await self._check_statement(header)
         if not gate.ok:
             return False
-        if "mhjDim" in candidate or "MHJUpper" in candidate:
+        if "GraphRamseyUpper" in candidate:
+            symbolic_bodies = [
+                "exact erdos_szekeres _ _ (by omega) (by omega)",
+                "exact graph_ramsey _ _ (by omega) (by omega)",
+                "exact ramsey_left_one _ _ (by omega)",
+                "exact ramsey_right_one _ _ (by omega)",
+                "exact ramsey_left_two _ (by omega)",
+                "exact ramsey_right_two _ (by omega)",
+                "exact ramsey_3_3_upper",
+                "exact ramsey_3_3_lower",
+                "exact ramsey_3_4_upper",
+                "exact ramsey_3_4_lower",
+                "exact ramsey_3_5_upper",
+                "exact ramsey_3_5_lower",
+                "exact ramsey_4_4_upper",
+                "exact ramsey_4_4_lower",
+                "exact ramsey_3_4_upper.symm",
+                "exact ramsey_3_5_upper.symm",
+            ]
+        elif "MulticolorRamseyUpper" in candidate:
+            symbolic_bodies = [
+                "exact multicolor_triangle_ramsey _ (by omega)",
+                "exact ramsey_multicolor_triangles _ (by omega)",
+                "exact ramsey_3_3_multicolor_upper",
+                "exact ramsey_3_3_3_upper",
+                "exact ramsey_3_3_3_lower",
+            ]
+        elif "HasMonoSchur" in candidate:
+            symbolic_bodies = [
+                "exact schur_theorem _ (by omega)",
+                "exact schur_1_gt_1",
+                "exact schur_1_le_2",
+                "exact schur_2_gt_4",
+                "exact schur_2_le_5",
+                "exact schur_3_gt_13",
+                "exact schur_3_le_14",
+            ]
+        elif "mhjDim" in candidate or "MHJUpper" in candidate:
             symbolic_bodies = [
                 "exact mhj_shelah _ _ _ (by omega) (by omega)",
                 "exact multidimensional_hales_jewett _ _ _ (by omega) (by omega) (by omega)",
@@ -264,13 +317,17 @@ class Orchestrator:
         return False
 
     async def _try_vdw_skeptic(self, N: int, k: int, r: int, asserts_upper: bool) -> bool:
-        if N < 1 or k < 1 or r < 1 or N > 32:
+        if N < 1 or k < 1 or r < 1 or N > 40:
             return False
         self.emit("worker", "skeptic", "vdw_solve", f"Solving finite HasMonoAP {N} {k} {r}...")
-        res = skeptic_hj.solve_vdw(N, k, r)
-        if res["status"] == "SAT_AP_FREE" and res["coloring"] is not None:
+        res = hypergraph.solve_vdw_cert(
+            N, k, r, root=N // 2, max_nodes=self.cfg.skeptic_max_nodes, walksat_steps=8000
+        )
+        if res.status == "UNKNOWN":
+            return False
+        if res.status == "SAT_FREE" and res.witness_coloring is not None:
             thm_name = self._unique_name(f"vdw_{k}_{r}_gt_{N}")
-            lean_code = skeptic_hj.emit_vdw_lower_lean(N, k, r, res["coloring"], theorem_name=thm_name)
+            lean_code = hypergraph.emit_vdw_cert_lean(res, theorem_name=thm_name)
             chk = await self._check(lean_code)
             audit = await self.verifier.axiom_audit(lean_code, thm_name)
             self.emit("lean", "lean_verifier", "axiom_audit", f"ok={audit.ok} axioms={audit.axioms}")
@@ -279,7 +336,7 @@ class Orchestrator:
             if asserts_upper:
                 self.job.refutation = Refutation(
                     claim=self.job.problem,
-                    counterexample={"N": N, "k": k, "r": r, "coloring": res["coloring"]},
+                    counterexample={"N": N, "k": k, "r": r, "coloring": res.witness_coloring},
                     lean_witness_code=lean_code,
                     lean_verified=True,
                     note=f"AP-free {r}-coloring of Fin {N} verified by Lean 4.",
@@ -296,10 +353,110 @@ class Orchestrator:
             self.job.summary = f"PROVED {thm_name} : ¬ HasMonoAP {N} {k} {r} via Lean-verified coloring."
             self.emit("chef", "chef", "proved", self.job.summary)
             return True
-        return False
+
+        thm_name = self._unique_name(f"vdw_{k}_{r}_le_{N}")
+        lean_code = hypergraph.emit_vdw_cert_lean(res, theorem_name=thm_name)
+        chk = await self._check(lean_code)
+        audit = await self.verifier.axiom_audit(lean_code, thm_name)
+        self.emit("lean", "lean_verifier", "axiom_audit", f"ok={audit.ok} axioms={audit.axioms}")
+        if not (chk.ok and chk.sorries == 0 and audit.ok):
+            return False
+        if not asserts_upper:
+            self.job.refutation = Refutation(
+                claim=self.job.problem,
+                counterexample={"N": N, "k": k, "r": r, "cert_nodes": res.nodes_explored},
+                lean_witness_code=lean_code,
+                lean_verified=True,
+                note=f"HasMonoAP {N} {k} {r} proved true via kernel-checked HyperCert.",
+            )
+            self.job.final_lean = lean_code
+            self.job.status = JobStatus.REFUTED
+            self.job.phase = "refuted"
+            self.job.summary = f"REFUTED claim ¬ HasMonoAP {N} {k} {r}; proved {thm_name}."
+            self.emit("chef", "chef", "refuted", self.job.summary)
+            return True
+        self.job.final_lean = lean_code
+        self.job.status = JobStatus.PROVED
+        self.job.phase = "proved"
+        self.job.summary = f"PROVED {thm_name} : HasMonoAP {N} {k} {r} via kernel-checked HyperCert."
+        self.emit("chef", "chef", "proved", self.job.summary)
+        return True
+
+    async def _try_schur_skeptic(self, N: int, r: int, asserts_upper: bool) -> bool:
+        if N < 1 or r < 1 or N > 20:
+            return False
+        self.emit("worker", "skeptic", "schur_solve", f"Solving finite HasMonoSchur {N} {r}...")
+        res = hypergraph.solve_schur(N, r, max_nodes=self.cfg.skeptic_max_nodes, walksat_steps=6000)
+        if res.status == "UNKNOWN":
+            return False
+        is_free = res.status == "SAT_FREE"
+        thm_name = self._unique_name(f"schur_{r}_{'gt' if is_free else 'le'}_{N}")
+        lean_code = hypergraph.emit_schur_lean(res, theorem_name=thm_name)
+        chk = await self._check(lean_code)
+        audit = await self.verifier.axiom_audit(lean_code, thm_name)
+        self.emit("lean", "lean_verifier", "axiom_audit", f"ok={audit.ok} axioms={audit.axioms}")
+        if not (chk.ok and chk.sorries == 0 and audit.ok):
+            return False
+        if (asserts_upper and is_free) or (not asserts_upper and not is_free):
+            self.job.refutation = Refutation(
+                claim=self.job.problem,
+                counterexample={"N": N, "r": r, "status": res.status},
+                lean_witness_code=lean_code,
+                lean_verified=True,
+                note=f"Schur finite claim resolved via {res.status} verified by Lean 4.",
+            )
+            self.job.final_lean = lean_code
+            self.job.status = JobStatus.REFUTED
+            self.job.phase = "refuted"
+            self.job.summary = f"REFUTED claim using Lean-verified Schur certificate {thm_name}."
+            self.emit("chef", "chef", "refuted", self.job.summary)
+            return True
+        self.job.final_lean = lean_code
+        self.job.status = JobStatus.PROVED
+        self.job.phase = "proved"
+        self.job.summary = f"PROVED {thm_name} via Lean-verified Schur certificate."
+        self.emit("chef", "chef", "proved", self.job.summary)
+        return True
+
+    async def _try_ramsey_skeptic(self, N: int, s: int, t: int | None, r: int, asserts_upper: bool) -> bool:
+        if N < 2 or N > 18 or r < 1:
+            return False
+        self.emit("worker", "skeptic", "ramsey_solve", f"Searching clique-free coloring on Fin {N}...")
+        res = hypergraph.solve_graph_ramsey(N, s, t, r=r, steps=10000)
+        if res.status != "SAT_FREE":
+            return False
+        thm_name = self._unique_name(
+            f"ramsey_{s}_{t}_{'gt'}_{N}" if (r == 2 and t is not None) else f"ramsey_mono_{r}_{s}_gt_{N}"
+        )
+        lean_code = hypergraph.emit_graph_ramsey_lower_lean(res, theorem_name=thm_name)
+        chk = await self._check(lean_code)
+        audit = await self.verifier.axiom_audit(lean_code, thm_name)
+        self.emit("lean", "lean_verifier", "axiom_audit", f"ok={audit.ok} axioms={audit.axioms}")
+        if not (chk.ok and chk.sorries == 0 and audit.ok):
+            return False
+        if asserts_upper:
+            self.job.refutation = Refutation(
+                claim=self.job.problem,
+                counterexample={"N": N, "s": s, "t": t, "r": r, "notes": res.notes},
+                lean_witness_code=lean_code,
+                lean_verified=True,
+                note=f"Clique-free coloring of Fin {N} verified by Lean 4.",
+            )
+            self.job.final_lean = lean_code
+            self.job.status = JobStatus.REFUTED
+            self.job.phase = "refuted"
+            self.job.summary = f"REFUTED claim with Lean-verified graph witness {thm_name}."
+            self.emit("chef", "chef", "refuted", self.job.summary)
+            return True
+        self.job.final_lean = lean_code
+        self.job.status = JobStatus.PROVED
+        self.job.phase = "proved"
+        self.job.summary = f"PROVED {thm_name} via Lean-verified graph witness."
+        self.emit("chef", "chef", "proved", self.job.summary)
+        return True
 
     async def _try_hj_skeptic(self) -> bool:
-        """Phase 0: Try symbolic base theorems, then finite combinatorial HJ/VdW solvers."""
+        """Phase 0: Try symbolic base theorems, then finite combinatorial HJ/VdW/Schur/Ramsey solvers."""
         self.job.phase = "skeptic"
         if await self._try_symbolic_fastpath():
             return True
@@ -308,6 +465,27 @@ class Orchestrator:
         if m_vdw:
             if await self._try_vdw_skeptic(
                 int(m_vdw.group(2)), int(m_vdw.group(3)), int(m_vdw.group(4)), m_vdw.group(1) is None
+            ):
+                return True
+
+        m_schur = _SCHUR_PATTERN_RE.search(self.job.problem)
+        if m_schur:
+            if await self._try_schur_skeptic(
+                int(m_schur.group(2)), int(m_schur.group(3)), m_schur.group(1) is None
+            ):
+                return True
+
+        m_ram = _RAMSEY_PATTERN_RE.search(self.job.problem)
+        if m_ram:
+            if await self._try_ramsey_skeptic(
+                int(m_ram.group(2)), int(m_ram.group(3)), int(m_ram.group(4)), 2, m_ram.group(1) is None
+            ):
+                return True
+
+        m_mram = _MRAMSEY_PATTERN_RE.search(self.job.problem)
+        if m_mram:
+            if await self._try_ramsey_skeptic(
+                int(m_mram.group(2)), int(m_mram.group(4)), None, int(m_mram.group(3)), m_mram.group(1) is None
             ):
                 return True
 
@@ -427,18 +605,37 @@ class Orchestrator:
         if (m_vdw := _VDW_PATTERN_RE.search(node.lean_statement)):
             asserts_upper = m_vdw.group(1) is None
             N, k, r = int(m_vdw.group(2)), int(m_vdw.group(3)), int(m_vdw.group(4))
-            if 1 <= N <= 32 and k >= 1 and r >= 1:
-                vres = skeptic_hj.solve_vdw(N, k, r)
-                if (asserts_upper and vres["status"] == "SAT_AP_FREE") or (
-                    not asserts_upper and vres["status"] == "UNSAT_MONO_FORCED"
+            if 1 <= N <= 40 and k >= 1 and r >= 1:
+                vres = hypergraph.solve_vdw_cert(N, k, r, root=N // 2, max_nodes=self.cfg.skeptic_max_nodes)
+                if (asserts_upper and vres.status == "SAT_FREE") or (
+                    not asserts_upper and vres.status == "UNSAT_MONO"
                 ):
                     node.status = NodeStatus.REFUTED
-                    node.last_errors = [f"combinatorially refuted ({vres['status']})"]
+                    node.last_errors = [f"combinatorially refuted ({vres.status})"]
                     self.emit(
                         "chef",
                         "chef",
                         "lemma_refuted",
-                        f"{node.lean_name} refuted by VdW Skeptic ({vres['status']}) before proving.",
+                        f"{node.lean_name} refuted by VdW Skeptic ({vres.status}) before proving.",
+                        node.id,
+                    )
+                    return True
+
+        if (m_schur := _SCHUR_PATTERN_RE.search(node.lean_statement)):
+            asserts_upper = m_schur.group(1) is None
+            N, r = int(m_schur.group(2)), int(m_schur.group(3))
+            if 1 <= N <= 20 and r >= 1:
+                sres = hypergraph.solve_schur(N, r, max_nodes=self.cfg.skeptic_max_nodes)
+                if (asserts_upper and sres.status == "SAT_FREE") or (
+                    not asserts_upper and sres.status == "UNSAT_MONO"
+                ):
+                    node.status = NodeStatus.REFUTED
+                    node.last_errors = [f"combinatorially refuted ({sres.status})"]
+                    self.emit(
+                        "chef",
+                        "chef",
+                        "lemma_refuted",
+                        f"{node.lean_name} refuted by Schur Skeptic ({sres.status}) before proving.",
                         node.id,
                     )
                     return True

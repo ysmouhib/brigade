@@ -236,16 +236,19 @@ class RealLeanVerifier:
         if self._lean_path_cache is not None:
             return self._lean_path_cache
         if self.lake_bin.exists():
-            proc = subprocess.run(
-                [str(self.lake_bin), "env", "printenv", "LEAN_PATH"],
-                cwd=str(self.project_dir),
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            if proc.returncode == 0 and proc.stdout.strip():
-                self._lean_path_cache = proc.stdout.strip()
-                return self._lean_path_cache
+            try:
+                proc = subprocess.run(
+                    [str(self.lake_bin), "env", "printenv", "LEAN_PATH"],
+                    cwd=str(self.project_dir),
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                if proc.returncode == 0 and proc.stdout.strip():
+                    self._lean_path_cache = proc.stdout.strip()
+                    return self._lean_path_cache
+            except (OSError, subprocess.SubprocessError):
+                pass
         self._lean_path_cache = str(self.project_dir / ".lake" / "build" / "lib" / "lean")
         return self._lean_path_cache
 

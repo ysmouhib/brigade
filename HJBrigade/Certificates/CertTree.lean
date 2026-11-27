@@ -286,16 +286,16 @@ theorem checkCertSym2_sound (d k : Nat) (hk : k ≥ 1) (rootIdx : Nat) (tree : C
     have hlt := c0.isLt
     omega
 
-private def swapColor0 {r : Nat} (hr : r ≥ 1) (a x : Fin r) : Fin r :=
+def swapColor0 {r : Nat} (hr : r ≥ 1) (a x : Fin r) : Fin r :=
   if x = a then ⟨0, hr⟩
   else if x.val = 0 then a
   else x
 
-private theorem swapColor0_self {r : Nat} (hr : r ≥ 1) (a : Fin r) :
+theorem swapColor0_self {r : Nat} (hr : r ≥ 1) (a : Fin r) :
     swapColor0 hr a a = ⟨0, hr⟩ := by
   simp [swapColor0]
 
-private theorem swapColor0_invol {r : Nat} (hr : r ≥ 1) (a x : Fin r) :
+theorem swapColor0_invol {r : Nat} (hr : r ≥ 1) (a x : Fin r) :
     swapColor0 hr a (swapColor0 hr a x) = x := by
   by_cases hxa : x = a
   · subst hxa

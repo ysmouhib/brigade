@@ -38,6 +38,15 @@ class TestOrchestratorAndCLI(unittest.IsolatedAsyncioTestCase):
             "hj_implies_vdw",
             "checkCertSym2_sound",
             "checkCertSym_sound",
+            "checkHyperCertSym_sound",
+            "GraphRamseyUpper",
+            "MulticolorRamseyUpper",
+            "erdos_szekeres_even",
+            "ramsey_4_4_exact",
+            "ramsey_3_3_3_exact",
+            "schur_theorem",
+            "schur_3_exact",
+            "vdw_4_2_exact",
         ):
             self.assertIn(expected, names)
         hits = idx.search("ColorFocused dichotomy", limit=5)
@@ -228,7 +237,7 @@ class TestOrchestratorAndCLI(unittest.IsolatedAsyncioTestCase):
         suite = PROJECT_DIR / "benchmarks" / "hj_suite.jsonl"
         results, all_ok = await run_benchmark_suite(PROJECT_DIR, suite, live_llm=False)
         self.assertTrue(all_ok, results)
-        self.assertEqual(len(results), 16)
+        self.assertEqual(len(results), 22)
 
     def test_cli_audit_repo_and_index(self) -> None:
         rc_idx = cli_main(["--project-dir", str(PROJECT_DIR), "index", "--query", "HJUpper"])

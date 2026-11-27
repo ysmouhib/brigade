@@ -14,3 +14,9 @@
 {"id": "moser_3_3_upper_16", "problem": "Prove ∀ A : Word 3 3 → Bool, IsGeomLineFree A → wordCard A ≤ 16", "expected": "proved"}
 {"id": "hj_4_3_3_trap", "problem": "Prove HJUpper 4 3 3", "expected": "refuted"}
 {"id": "hj_4_4_2_trap", "problem": "Prove HJUpper 4 4 2", "expected": "refuted"}
+{"id": "vdw_35_4_2_chvatal", "problem": "Prove HasMonoAP 35 4 2", "expected": "proved"}
+{"id": "vdw_34_4_2_trap", "problem": "Prove HasMonoAP 34 4 2", "expected": "refuted"}
+{"id": "schur_14_3_upper", "problem": "Prove HasMonoSchur 14 3", "expected": "proved"}
+{"id": "schur_13_3_trap", "problem": "Prove HasMonoSchur 13 3", "expected": "refuted"}
+{"id": "ramsey_3_4_9_gg", "problem": "Prove GraphRamseyUpper 9 3 4", "expected": "proved"}
+{"id": "ramsey_4_4_17_paley_trap", "problem": "Prove GraphRamseyUpper 17 4 4", "expected": "refuted"}

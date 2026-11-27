@@ -9,7 +9,8 @@ from pathlib import Path
 import re
 import sys
 
-from . import bench, blueprint, density_hj, skeptic_hj
+from . import bench, blueprint, density_hj, explorer, hypergraph, mcp_server, skeptic_hj
+from .explorer import ResearchLab
 from .lean_verifier import RealLeanVerifier, lint_proof
 from .library_index import PremiseIndex
 from .llm import MultiProviderLLM, ProviderConfig
@@ -199,6 +200,115 @@ async def _cmd_certify_moser(args: argparse.Namespace) -> int:
     )
 
 
+async def _cmd_certify_vdw(args: argparse.Namespace) -> int:
+    proj = Path(args.project_dir).resolve()
+    root = args.root if args.root >= 0 else (args.n // 2)
+    res = hypergraph.solve_vdw_cert(
+        args.n, args.k, args.r, root=root, max_nodes=args.max_nodes
+    )
+    print(
+        f"VdW(k={args.k}, r={args.r}) @ N={args.n}: status={res.status}, "
+        f"nodes={res.nodes_explored}, edges={res.edge_count}"
+    )
+    if res.status == "UNKNOWN":
+        return 2
+    default_thm = (
+        f"vdw_{args.k}_{args.r}_le_{args.n}"
+        if res.status == "UNSAT_MONO"
+        else f"vdw_{args.k}_{args.r}_gt_{args.n}"
+    )
+    thm = args.theorem or default_thm
+    lean_src = hypergraph.emit_vdw_cert_lean(res, theorem_name=thm)
+    return await _write_and_verify_certificate(
+        proj, lean_src, thm, args.out, args.verify, args.lean_timeout, label="VdW certificate"
+    )
+
+
+async def _cmd_certify_schur(args: argparse.Namespace) -> int:
+    proj = Path(args.project_dir).resolve()
+    res = hypergraph.solve_schur(args.n, args.r, max_nodes=args.max_nodes)
+    print(
+        f"Schur(r={args.r}) @ n={args.n}: status={res.status}, "
+        f"nodes={res.nodes_explored}, triples={res.edge_count}"
+    )
+    if res.status == "UNKNOWN":
+        return 2
+    default_thm = (
+        f"schur_{args.r}_le_{args.n}"
+        if res.status == "UNSAT_MONO"
+        else f"schur_{args.r}_gt_{args.n}"
+    )
+    thm = args.theorem or default_thm
+    lean_src = hypergraph.emit_schur_lean(res, theorem_name=thm)
+    return await _write_and_verify_certificate(
+        proj, lean_src, thm, args.out, args.verify, args.lean_timeout, label="Schur certificate"
+    )
+
+
+async def _cmd_certify_ramsey(args: argparse.Namespace) -> int:
+    proj = Path(args.project_dir).resolve()
+    t_val = args.t if args.t is not None else (args.s if args.r == 2 else None)
+    res = hypergraph.solve_graph_ramsey(args.n, args.s, t_val, r=args.r, steps=args.steps)
+    print(f"Ramsey(s={args.s}, t={t_val or args.s}, r={args.r}) @ N={args.n}: status={res.status} ({res.notes})")
+    if res.status != "SAT_FREE":
+        return 2
+    thm = args.theorem or (
+        f"ramsey_{args.s}_{t_val or args.s}_gt_{args.n}"
+        if args.r == 2
+        else f"ramsey_mono_{args.r}_{args.s}_gt_{args.n}"
+    )
+    lean_src = hypergraph.emit_graph_ramsey_lower_lean(res, theorem_name=thm)
+    return await _write_and_verify_certificate(
+        proj, lean_src, thm, args.out, args.verify, args.lean_timeout, label="Graph Ramsey witness"
+    )
+
+
+def _cmd_explore(args: argparse.Namespace) -> int:
+    rows = explorer.explore_family(
+        args.family,
+        k=args.k,
+        r=args.r,
+        s=args.s,
+        t=args.t,
+        start=args.start,
+        stop=args.stop,
+    )
+    if args.json:
+        print(json.dumps(rows, indent=2))
+    else:
+        for row in rows:
+            print(json.dumps(row))
+    return 0
+
+
+def _cmd_lab(args: argparse.Namespace) -> int:
+    proj = Path(args.project_dir).resolve()
+    lab = ResearchLab(proj)
+    if args.lab_action == "add":
+        note = lab.add_note(
+            title=args.title,
+            family=args.family,
+            status=args.status,
+            summary=args.summary,
+            theorem=args.theorem,
+            evidence=args.evidence,
+        )
+        print(json.dumps(note, indent=2))
+        return 0
+    notes = lab.list_notes(family=args.family or None)
+    if args.json:
+        print(json.dumps(notes, indent=2))
+    else:
+        for n in notes:
+            print(f"[{n['id']}] ({n['family']}) {n['status']}: {n['title']} [{n.get('theorem', '')}]")
+    return 0
+
+
+async def _cmd_mcp(args: argparse.Namespace) -> int:
+    proj = Path(args.project_dir).resolve()
+    return await mcp_server.serve_stdio(proj)
+
+
 async def _cmd_blueprint(args: argparse.Namespace) -> int:
     proj = Path(args.project_dir).resolve()
     report = await blueprint.inspect_blueprint(proj, Path(args.file).resolve())
@@ -282,6 +392,62 @@ def build_parser() -> argparse.ArgumentParser:
     pm.add_argument("--verify", action="store_true")
     pm.add_argument("--lean-timeout", type=float, default=60.0)
 
+    pvdw = sub.add_parser("certify-vdw", help="Solve HasMonoAP N k r and emit Lean 4 HyperCert/witness")
+    pvdw.add_argument("--n", type=int, required=True)
+    pvdw.add_argument("--k", type=int, required=True)
+    pvdw.add_argument("--r", type=int, required=True)
+    pvdw.add_argument("--root", type=int, default=-1)
+    pvdw.add_argument("--theorem", default="")
+    pvdw.add_argument("--out", default="")
+    pvdw.add_argument("--verify", action="store_true")
+    pvdw.add_argument("--max-nodes", type=int, default=250_000)
+    pvdw.add_argument("--lean-timeout", type=float, default=60.0)
+
+    psch = sub.add_parser("certify-schur", help="Solve HasMonoSchur n r and emit Lean 4 HyperCert/witness")
+    psch.add_argument("--n", type=int, required=True)
+    psch.add_argument("--r", type=int, required=True)
+    psch.add_argument("--theorem", default="")
+    psch.add_argument("--out", default="")
+    psch.add_argument("--verify", action="store_true")
+    psch.add_argument("--max-nodes", type=int, default=250_000)
+    psch.add_argument("--lean-timeout", type=float, default=60.0)
+
+    pram = sub.add_parser("certify-ramsey", help="Find and Lean-verify clique-free Graph Ramsey witnesses")
+    pram.add_argument("--n", type=int, required=True)
+    pram.add_argument("--s", type=int, required=True)
+    pram.add_argument("--t", type=int, default=None)
+    pram.add_argument("--r", type=int, default=2)
+    pram.add_argument("--steps", type=int, default=12000)
+    pram.add_argument("--theorem", default="")
+    pram.add_argument("--out", default="")
+    pram.add_argument("--verify", action="store_true")
+    pram.add_argument("--lean-timeout", type=float, default=60.0)
+
+    pex = sub.add_parser("explore", help="Sweep a Ramsey parameter frontier and inspect structure")
+    pex.add_argument("family", choices=["hj", "vdw", "schur", "ramsey", "dhj", "moser"])
+    pex.add_argument("--k", type=int, default=3)
+    pex.add_argument("--r", type=int, default=2)
+    pex.add_argument("--s", type=int, default=3)
+    pex.add_argument("--t", type=int, default=None)
+    pex.add_argument("--start", type=int, default=1)
+    pex.add_argument("--stop", type=int, default=6)
+    pex.add_argument("--json", action="store_true")
+
+    plab = sub.add_parser("lab", help="Manage research/DISCOVERIES.md and notes.jsonl")
+    plab_sub = plab.add_subparsers(dest="lab_action", required=True)
+    plab_list = plab_sub.add_parser("list")
+    plab_list.add_argument("--family", default="")
+    plab_list.add_argument("--json", action="store_true")
+    plab_add = plab_sub.add_parser("add")
+    plab_add.add_argument("--title", required=True)
+    plab_add.add_argument("--family", required=True)
+    plab_add.add_argument("--status", default="VERIFIED")
+    plab_add.add_argument("--summary", required=True)
+    plab_add.add_argument("--theorem", default="")
+    plab_add.add_argument("--evidence", default="")
+
+    sub.add_parser("mcp", help="Run Antigravity stdio JSON-RPC 2.0 MCP server")
+
     pbl = sub.add_parser("blueprint", help="Extract sorry goals, premise hints, and axiom status for a Lean file")
     pbl.add_argument("file")
     pbl.add_argument("--json", action="store_true")
@@ -293,13 +459,21 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.cmd == "index":
         return _cmd_index(args)
+    if args.cmd == "explore":
+        return _cmd_explore(args)
+    if args.cmd == "lab":
+        return _cmd_lab(args)
     coro_map = {
         "verify": _cmd_verify,
         "audit-repo": _cmd_audit_repo,
         "certify-hj": _cmd_certify_hj,
         "certify-dhj": _cmd_certify_dhj,
         "certify-moser": _cmd_certify_moser,
+        "certify-vdw": _cmd_certify_vdw,
+        "certify-schur": _cmd_certify_schur,
+        "certify-ramsey": _cmd_certify_ramsey,
         "blueprint": _cmd_blueprint,
+        "mcp": _cmd_mcp,
         "prove": _cmd_prove,
         "bench": _cmd_bench,
     }
